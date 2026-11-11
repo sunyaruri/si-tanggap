@@ -1,0 +1,9 @@
+{
+  "name": "si-tanggap-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Prototipe web SI-TANGGAP: simulasi tata kelola krisis distribusi BBM",
+  "scripts": {
+    "test": "node --test"
+  }
+}

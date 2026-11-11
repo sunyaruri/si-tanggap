@@ -1,0 +1,133 @@
+/* Gaya khusus tampilan Pertamina (tema v2). Semua aturan dibatasi .app-pertamina
+   supaya komponen bersama di tampilan lain tidak ikut berubah. */
+
+/* Ikon selalu abu netral: tanpa kotak ikon berwarna. */
+.app-pertamina .empty-icon,
+.app-pertamina .inbox-icon,
+.app-pertamina .inbox-item.is-neutral .inbox-icon,
+.app-pertamina .inbox-item.tone-crit .inbox-icon {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--icon);
+}
+
+.app-pertamina .inbox-item.tone-crit {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+.app-pertamina .inbox-item.tone-crit .inbox-icon {
+  color: var(--crit);
+}
+
+.app-pertamina .term-name .i,
+.app-pertamina .route-line .i {
+  color: var(--icon);
+}
+
+.app-pertamina .side-stack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.app-pertamina .panel-foot .link {
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.app-pertamina .risk-row > .i {
+  color: var(--icon);
+}
+
+/* Baris di halaman Pertamina hanya informasi, tidak bisa diklik. */
+.app-pertamina div.risk-row {
+  cursor: default;
+}
+
+.app-pertamina div.risk-row:hover {
+  background: none;
+}
+
+/* Tanda status kecil di depan angka: bentuk + warna, tanpa latar. */
+.app-pertamina .st {
+  display: inline-flex;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+
+.app-pertamina .st .shape {
+  width: 10px;
+  height: 10px;
+}
+
+.app-pertamina .st-ok .shape {
+  color: var(--ok);
+}
+
+.app-pertamina .st-warn .shape {
+  color: var(--warn);
+}
+
+.app-pertamina .st-crit .shape {
+  color: var(--crit);
+}
+
+.app-pertamina .table td.num,
+.app-pertamina .table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.app-pertamina .toolbar .note {
+  font-weight: 600;
+}
+
+.app-pertamina .route-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.app-pertamina .plan-need {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 15px;
+}
+
+.app-pertamina .foot-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-pertamina .quota-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.app-pertamina .quota-form .quota-fields {
+  align-self: stretch;
+}
+
+.app-pertamina .plain-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 18px;
+  color: var(--ink-2);
+  list-style: disc;
+}
+
+.app-pertamina .plain-list li::marker {
+  color: var(--icon);
+}
+

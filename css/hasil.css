@@ -1,0 +1,42 @@
+/* Gaya khusus tampilan hasil (tema v2): "dengan SI-TANGGAP" biru, "tanpa sistem" abu.
+   Warna jalur status memakai turunan terang dari tanda status tema v2. */
+
+.hasil {
+  --lane-normal: #a8dfcd;
+  --lane-waspada: #f4d6a6;
+  --lane-krisis: #e2a3a7;
+}
+
+.hasil .app-icon {
+  border-radius: 10px;
+  background: var(--b900);
+  box-shadow: none;
+}
+
+.hasil .lane-key .mk {
+  width: 14px;
+  height: 14px;
+}
+
+.hasil .lane-key .mk .shape {
+  filter: none;
+  stroke: none;
+}
+
+.hasil .lane-key.is-normal .mk {
+  color: var(--lane-normal);
+}
+
+.hasil .lane-key.is-waspada .mk {
+  color: var(--lane-waspada);
+}
+
+.hasil .lane-key.is-krisis .mk {
+  color: var(--lane-krisis);
+}
+
+.hasil .cmp-delta {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ok-ink);
+}

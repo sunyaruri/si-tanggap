@@ -1,0 +1,866 @@
+/* Kerangka aplikasi peran (sidebar + bilah atas + sub-halaman) dan komponen bersama tema v2.
+   Aturan warna: netral dulu; biru hanya untuk yang bisa diklik; status hanya sebagai tanda kecil,
+   kecuali satu banner KRISIS merah solid per layar. */
+
+body.is-shot {
+  --demo-h: 0px;
+}
+
+.view.is-app {
+  max-width: none;
+  padding: 0;
+}
+
+/* ---------- Kerangka ---------- */
+.shell {
+  display: grid;
+  grid-template-columns: var(--side-w) minmax(0, 1fr);
+  min-height: calc(100dvh - var(--demo-h));
+}
+
+.side {
+  position: sticky;
+  top: var(--demo-h);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: calc(100dvh - var(--demo-h));
+  padding: 18px 12px 14px;
+  overflow-y: auto;
+  background: var(--b900);
+  color: #c3d2e2;
+}
+
+.side-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 8px 14px;
+  color: #fff;
+  text-decoration: none;
+}
+
+.side-logo {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--b600);
+}
+
+.side-brand b {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.side-brand small {
+  display: block;
+  color: #8fa6bf;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.side-group {
+  padding: 14px 10px 4px;
+  color: #6f89a6;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.side-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.side-link .i {
+  color: #7f9ab8;
+}
+
+.side-link:hover {
+  background: rgb(255 255 255 / 0.05);
+  color: #fff;
+}
+
+.side-link[aria-current="page"] {
+  background: rgb(255 255 255 / 0.08);
+  box-shadow: inset 3px 0 0 var(--lime);
+  color: #fff;
+}
+
+.side-link[aria-current="page"] .i {
+  color: var(--lime);
+}
+
+.side-link em {
+  min-width: 22px;
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: rgb(255 255 255 / 0.1);
+  color: #dfe8f1;
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.side-link em[hidden] {
+  display: none;
+}
+
+.side-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+  padding: 12px 8px 0;
+  border-top: 1px solid rgb(255 255 255 / 0.08);
+  color: #8fa6bf;
+  font-size: 12.5px;
+}
+
+.side-avatar {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--b800);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 800;
+}
+
+.shell-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.topbar {
+  position: sticky;
+  top: var(--demo-h);
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  padding: 0 28px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.topbar-title {
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.topbar-context {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.topbar-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.topbar-clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.topbar-clock .i {
+  color: var(--icon);
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  padding: 24px 28px 140px;
+}
+
+.page > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+body.is-shot .page {
+  padding-bottom: 28px;
+}
+
+/* ---------- Pil & KPI versi tenang ---------- */
+.pill.tone-ok,
+.pill.tone-warn,
+.pill.tone-crit,
+.pill.tone-empty {
+  border-color: var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.tone-warn .shape {
+  color: var(--warn);
+}
+
+.kpis {
+  margin-bottom: 0;
+}
+
+.kpis.is-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.kpi {
+  padding: 14px 16px 12px;
+}
+
+.kpi-icon {
+  width: auto;
+  height: auto;
+  background: none;
+  color: var(--icon);
+}
+
+.kpi[data-tone] .kpi-icon {
+  background: none;
+  color: var(--icon);
+}
+
+.kpi-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-value small {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+/* Status di KPI cukup tanda kecil di depan angka, bentuk + warna. */
+.kpi[data-tone="crit"] .kpi-value::before,
+.kpi[data-tone="warn"] .kpi-value::before {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  content: "";
+}
+
+.kpi[data-tone="crit"] .kpi-value::before {
+  border-radius: 2px;
+  background: var(--crit);
+}
+
+.kpi[data-tone="warn"] .kpi-value::before {
+  background: var(--warn);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.kpi-sub b {
+  color: var(--crit-ink);
+}
+
+.kpi-spark:empty {
+  display: none;
+}
+
+/* ---------- Banner status ---------- */
+.status-banner {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 18px 22px;
+  border-radius: var(--radius);
+}
+
+.status-banner.is-crit {
+  background: var(--crit);
+  color: #fff;
+}
+
+/* WASPADA tidak memakai blok berwarna: kartu putih dengan garis tanda di kiri. */
+.status-banner.is-warn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: inset 4px 0 0 var(--warn);
+}
+
+.status-banner.is-ok {
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.status-lead {
+  min-width: 0;
+}
+
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.status-tag span {
+  font-weight: 600;
+  letter-spacing: 0;
+  opacity: 0.85;
+}
+
+.status-tag .shape {
+  width: 10px;
+  height: 10px;
+}
+
+.is-crit .status-tag .shape {
+  color: #fff;
+}
+
+.is-warn .status-tag {
+  color: var(--warn-ink);
+}
+
+.is-ok .status-tag {
+  color: var(--ok-ink);
+}
+
+.status-banner h2 {
+  margin: 4px 0 2px;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.status-banner p {
+  max-width: 62ch;
+  font-size: 14px;
+}
+
+.is-crit p {
+  color: #ffe3e5;
+}
+
+.is-warn p,
+.is-ok p {
+  color: var(--muted);
+}
+
+.status-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.status-facts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.is-crit .status-facts span {
+  background: rgb(0 0 0 / 0.18);
+}
+
+.is-warn .status-facts span,
+.is-ok .status-facts span {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+
+.status-facts .i {
+  width: 15px;
+  height: 15px;
+}
+
+.status-deadline {
+  flex: none;
+  margin-left: auto;
+  text-align: right;
+}
+
+.status-deadline small,
+.status-deadline em {
+  display: block;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.is-crit .status-deadline small,
+.is-crit .status-deadline em {
+  color: #ffe3e5;
+}
+
+.is-warn .status-deadline small,
+.is-warn .status-deadline em,
+.is-ok .status-deadline small,
+.is-ok .status-deadline em {
+  color: var(--muted);
+}
+
+.status-deadline strong {
+  display: block;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.status-banner .btn {
+  flex: none;
+}
+
+.is-crit .btn {
+  border-color: #fff;
+  background: #fff;
+  color: var(--crit-ink);
+}
+
+.is-crit .btn:hover:not(:disabled) {
+  background: #fff4f4;
+}
+
+.btn .badge {
+  display: inline-grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  padding: 0 6px;
+  border-radius: 99px;
+  background: var(--n800);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 800;
+}
+
+.is-crit .btn .badge {
+  background: var(--crit);
+}
+
+/* ---------- Tata letak halaman ---------- */
+.cols {
+  display: grid;
+  gap: var(--gap);
+}
+
+.cols-2-1 {
+  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr);
+}
+
+.cols-1-1 {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.cols-map {
+  grid-template-columns: minmax(0, 1fr) 360px;
+}
+
+.panel-head .link {
+  margin-left: auto;
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.panel-head .link:hover {
+  text-decoration: underline;
+}
+
+.panel-head h2 .i {
+  color: var(--icon);
+}
+
+/* ---------- Daftar tindakan ---------- */
+.todo-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.todo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--surface-3);
+  color: inherit;
+  text-decoration: none;
+}
+
+.todo:last-child {
+  border-bottom: 0;
+}
+
+.todo > .i {
+  color: var(--icon);
+}
+
+.todo b {
+  display: block;
+  font-size: 14px;
+}
+
+.todo small {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.todo .count-box {
+  margin-left: auto;
+  padding: 1px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+a.todo:hover b {
+  color: var(--brand);
+}
+
+/* ---------- Bilah alat tabel: cari, saring, halaman ---------- */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(280px, 100%);
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.search:focus-within {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px rgb(44 138 220 / 0.18);
+}
+
+.search .i {
+  color: var(--icon);
+}
+
+.search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 13.5px;
+}
+
+.filter {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+
+.filter button {
+  height: 28px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.filter button[aria-pressed="true"] {
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgb(23 32 41 / 0.12);
+  color: var(--ink);
+}
+
+.filter button b {
+  margin-left: 4px;
+  color: var(--icon);
+  font-variant-numeric: tabular-nums;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.pager .spacer {
+  margin-left: auto;
+}
+
+.pager button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.pager button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.table tbody tr:hover td {
+  background: var(--surface-2);
+}
+
+.table td.muted {
+  color: var(--muted);
+}
+
+/* ---------- Daftar SPBU di samping peta ---------- */
+.risk-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.risk-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--surface-3);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.risk-row:hover {
+  background: var(--surface-2);
+}
+
+.risk-row:last-child {
+  border-bottom: 0;
+}
+
+.risk-row b {
+  display: block;
+  font-size: 13.5px;
+}
+
+.risk-row small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.risk-row .value {
+  margin-left: auto;
+  font-size: 13.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Selector berlapis supaya menang atas ".map-wrap > .map" (peta mengisi panel) di styles.css. */
+.map-wrap > .map.map-md {
+  flex: none;
+  height: 360px;
+  min-height: 0;
+}
+
+.map-wrap > .map.map-xl {
+  flex: none;
+  height: max(520px, calc(100dvh - var(--demo-h) - 62px - 24px - 140px - 64px));
+  min-height: 0;
+}
+
+body.is-shot .map-wrap > .map.map-xl {
+  height: max(520px, calc(100dvh - 62px - 24px - 28px - 64px));
+}
+
+/* ---------- Responsif ---------- */
+@media (max-width: 1180px) {
+  .cols-2-1,
+  .cols-1-1,
+  .cols-map {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .kpis.is-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .status-banner {
+    flex-wrap: wrap;
+  }
+  .status-deadline {
+    margin-left: 0;
+    text-align: left;
+  }
+}
+
+@media (max-width: 860px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .side {
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    height: auto;
+    padding: 8px 12px;
+    overflow-x: auto;
+  }
+  .side-brand small,
+  .side-group,
+  .side-user {
+    display: none;
+  }
+  .side-brand {
+    padding: 0 8px 0 0;
+  }
+  .side-nav {
+    display: flex;
+    gap: 2px;
+  }
+  .side-link {
+    white-space: nowrap;
+  }
+  .topbar {
+    position: static;
+    flex-wrap: wrap;
+    padding: 10px 16px;
+  }
+  .page {
+    padding: 16px 16px 220px;
+  }
+}
+
+@media (max-width: 640px) {
+  .kpis.is-4 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+a.btn {
+  text-decoration: none;
+}
+
+/* Tombol banner tetap rata kanan walau tanpa batas waktu. */
+.status-lead + .btn {
+  margin-left: auto;
+}
+
+/* Tombol saring boleh turun baris di layar sempit, supaya halaman tidak melebar. */
+.filter {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.toolbar > div {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Kapal tanker di peta regional: biru tua; cincin amber saat pasokan kapal berkurang. */
+.mk-ship {
+  display: grid;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--b900);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+  color: #fff;
+}
+
+.mk-ship.is-late {
+  box-shadow:
+    0 0 0 3px var(--warn),
+    0 1px 3px rgb(0 0 0 / 0.35);
+}
+
+.legend-item .mk-ship {
+  width: 18px;
+  height: 18px;
+  border-width: 1.5px;
+}
+
+/* Bilah saring peta: pilihan kecamatan dan jenis BBM. */
+.select {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.select:disabled {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.field-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}

@@ -1,0 +1,220 @@
+/* Gaya khusus tampilan devices (tema v2): tablet POS SPBU dan dua ponsel info publik.
+   Menimpa gaya lama di styles.css. Netral dulu; satu bidang berwarna kuat per layar
+   (vonis POS atau status KRISIS di ponsel), tanpa kotak pastel dan tanpa gradien. */
+
+/* ---------- Tablet POS ---------- */
+.device-tablet {
+  background: var(--n900);
+  box-shadow:
+    var(--shadow-lg),
+    inset 0 0 0 2px var(--n700);
+}
+
+.device-tablet .pos-bar {
+  background: var(--b900);
+}
+
+.device-tablet .pos-bar .logo-mark {
+  background: var(--b600);
+  box-shadow: none;
+}
+
+.device-tablet .pos-title small {
+  color: #8fa6bf;
+}
+
+/* Vonis = satu-satunya bidang berwarna kuat di layar POS. */
+.device-tablet .verdict {
+  border: 0;
+  color: #fff;
+}
+
+.device-tablet .verdict.is-ok {
+  background: var(--ok-ink);
+}
+
+.device-tablet .verdict.is-blocked {
+  background: var(--crit);
+}
+
+.device-tablet .verdict .verdict-icon {
+  background: rgb(255 255 255 / 0.16);
+  color: #fff;
+}
+
+.device-tablet .verdict div {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.device-tablet .quota {
+  gap: 6px;
+}
+
+.device-tablet .quota .sla-label {
+  color: var(--muted);
+}
+
+.device-tablet .plate-meta b {
+  color: var(--ink);
+}
+
+.device-tablet .plate-meta .chip {
+  align-self: flex-start;
+}
+
+.device-tablet .q-card.is-blocked {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+.device-tablet .q-icon {
+  width: auto;
+  height: auto;
+  background: none;
+  color: var(--icon);
+}
+
+.device-tablet .q-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.device-tablet .q-status .mk {
+  width: 11px;
+  height: 11px;
+}
+
+.device-tablet .q-status .mk .shape {
+  filter: none;
+  stroke: none;
+}
+
+/* ---------- Ponsel info publik ---------- */
+.publik .app-icon {
+  border-radius: 10px;
+  background: var(--b900);
+  box-shadow: none;
+}
+
+.publik .device-phone {
+  background: var(--n900);
+  box-shadow:
+    var(--shadow-lg),
+    inset 0 0 0 2px var(--n700);
+}
+
+.publik .phone-status.is-dark,
+.publik .phone-hero {
+  background: var(--b900);
+}
+
+.publik .phone-hero p {
+  color: #b9cbdd;
+}
+
+/* Kartu status: KRISIS blok merah solid, WASPADA kartu putih bergaris tanda, NORMAL tenang. */
+.publik .status-card {
+  display: block;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 6px 16px rgb(7 40 69 / 0.12);
+}
+
+.publik .status-card.tone-warn {
+  box-shadow:
+    inset 4px 0 0 var(--warn),
+    0 6px 16px rgb(7 40 69 / 0.12);
+}
+
+.publik .status-card.tone-crit {
+  border-color: var(--crit);
+  background: var(--crit);
+  color: #fff;
+}
+
+.status-card-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.status-card-tag .shape {
+  width: 10px;
+  height: 10px;
+}
+
+.publik .tone-ok .status-card-tag {
+  color: var(--ok-ink);
+}
+
+.publik .tone-warn .status-card-tag {
+  color: var(--warn-ink);
+}
+
+.publik .status-card strong {
+  margin-top: 2px;
+}
+
+.publik .tone-crit .status-card-tag,
+.publik .tone-crit .status-card-tag .shape,
+.publik .status-card.tone-crit strong {
+  color: #fff;
+}
+
+.publik .status-card.tone-crit p {
+  color: #ffe3e5;
+}
+
+.publik .spbu-list {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.publik .spbu-row {
+  gap: 12px;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.publik .spbu-row:last-child {
+  border-bottom: 0;
+}
+
+.publik .policy-list .i {
+  color: var(--icon);
+}
+
+.publik .report-cta h3 {
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.publik .btn-phone {
+  border-radius: 12px;
+}
+
+.publik .chat-avatar {
+  background: var(--b900);
+}
+
+.publik .chat-body {
+  background: var(--n100);
+}
+
+.publik .bubble {
+  border-radius: 4px 14px 14px 14px;
+  box-shadow: 0 1px 1px rgb(23 32 41 / 0.08);
+}
+
+.publik .bubble li::before {
+  color: var(--icon);
+}

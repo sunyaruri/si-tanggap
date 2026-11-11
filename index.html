@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SI-TANGGAP – Prototipe</title>
+    <meta
+      name="description"
+      content="Prototipe SI-TANGGAP: tata kelola krisis distribusi BBM berbasis early warning system, kuota adaptif anti-spekulan, dan komunikasi risiko terintegrasi."
+    />
+    <!-- Prototipe penelitian berisi data simulasi; jangan diindeks agar tidak disangka layanan resmi. -->
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="data:," />
+    <link
+      rel="preload"
+      href="vendor/fonts/plus-jakarta-sans-latin-wght-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/shell.css" />
+    <link rel="stylesheet" href="css/pertamina.css" />
+    <link rel="stylesheet" href="css/devices.css" />
+    <link rel="stylesheet" href="css/hasil.css" />
+  </head>
+  <body>
+    <header class="demo-nav">
+      <a class="logo" href="#pemda" aria-label="SI-TANGGAP, ke dashboard Pemda">
+        <span class="logo-mark" data-logo></span>
+        <span class="logo-text"
+          >SI-TANGGAP<small>Prototipe · data simulasi</small></span
+        >
+      </a>
+      <nav class="role-tabs" aria-label="Pilih tampilan">
+        <a href="#pemda" data-icon="landmark">Pemda</a>
+        <a href="#pertamina" data-icon="fuel">Pertamina</a>
+        <a href="#pos" data-icon="scan">POS SPBU</a>
+        <a href="#publik" data-icon="smartphone">Info publik</a>
+        <a href="#hasil" data-icon="chart">Hasil simulasi</a>
+      </nav>
+      <button
+        type="button"
+        class="nav-btn"
+        id="shot-on"
+        title="Sembunyikan bilah dan kontrol untuk tangkapan layar (Esc untuk keluar)"
+      >
+        <span data-icon="camera"></span
+        ><span class="nav-btn-text">Mode tangkapan layar</span>
+      </button>
+    </header>
+
+    <main id="view" class="view"></main>
+
+    <section class="dock" aria-label="Kontrol simulasi">
+      <label class="dock-scene">
+        <span class="dock-label">Adegan</span>
+        <select id="sim-scene"></select>
+      </label>
+      <div class="dock-group">
+        <button
+          type="button"
+          class="dock-play"
+          id="sim-play"
+          aria-label="Jalankan simulasi"
+        ></button>
+        <button
+          type="button"
+          class="dock-icon"
+          id="sim-reset"
+          aria-label="Ulang dari awal"
+          title="Ulang dari awal"
+        ></button>
+        <div
+          class="seg"
+          role="group"
+          aria-label="Kecepatan simulasi"
+          id="sim-speed"
+        >
+          <button type="button" data-speed="1">1×</button>
+          <button type="button" data-speed="4" aria-pressed="true">4×</button>
+          <button type="button" data-speed="16">16×</button>
+        </div>
+      </div>
+      <div class="scrub" aria-hidden="true">
+        <div class="scrub-track">
+          <span
+            class="scrub-band"
+            id="scrub-band"
+            title="Gangguan jalur Gumitir"
+          ></span>
+          <span class="scrub-fill" id="scrub-fill"></span>
+          <span class="scrub-head" id="scrub-head"></span>
+        </div>
+        <div class="scrub-labels" id="scrub-labels"></div>
+      </div>
+      <div class="dock-clock">
+        <span class="dock-time" id="sim-time"></span>
+        <span class="dock-day" id="sim-day"></span>
+      </div>
+      <span id="sim-status"></span>
+      <label
+        class="switch"
+        title="Persetujuan Pemda dan Pertamina dijalankan otomatis sesuai jeda skenario"
+      >
+        <input type="checkbox" id="sim-auto" />
+        <span class="switch-track" aria-hidden="true"></span>
+        Respons otomatis
+      </label>
+    </section>
+
+    <button type="button" class="shot-exit" id="shot-off">
+      Keluar mode tangkapan layar (Esc)
+    </button>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="vendor/leaflet/leaflet.js"></script>
+    <script src="js/core/config.js"></script>
+    <script src="js/core/ews.js"></script>
+    <script src="js/core/pos.js"></script>
+    <script src="js/core/sim.js"></script>
+    <script src="js/core/scenes.js"></script>
+    <script src="js/ui/icons.js"></script>
+    <script src="js/ui/dom.js"></script>
+    <script src="js/ui/charts.js"></script>
+    <script src="js/ui/map.js"></script>
+    <script src="js/ui/shell.js"></script>
+    <script src="js/ui/views/pemda.js"></script>
+    <script src="js/ui/views/pertamina.js"></script>
+    <script src="js/ui/views/pos.js"></script>
+    <script src="js/ui/views/publik.js"></script>
+    <script src="js/ui/views/hasil.js"></script>
+    <script src="js/ui/app.js"></script>
+  </body>
+</html>
