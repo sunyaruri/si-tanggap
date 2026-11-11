@@ -299,3 +299,25 @@ test("laporan hoaks diklarifikasi di kanal resmi setelah jeda verifikasi, lapora
   assert.equal(hoarding.clarifiedAt, null);
   assert.equal(state.log.filter((row) => row.kind === "clarify").length, 1);
 });
+
+test("rasio permintaan: 1 saat normal, naik saat panik termasuk yang ditahan kuota", () => {
+  const state = sim.createSim(calmConfig(), { withSystem: true });
+  assert.equal(sim.demandRatio(state), 1);
+  state.panic = 1;
+  const panicked = sim.demandRatio(state);
+  assert.ok(panicked > 1.2, `permintaan panik ${panicked}`);
+  state.crisisMode.active = true;
+  assert.equal(sim.demandRatio(state), panicked, "kuota menahan penjualan, bukan permintaan");
+});
+
+test("prospek stok: tanpa gangguan tidak habis; saat KRISIS ada waktu kritis lalu habis", () => {
+  const calm = sim.createSim(calmConfig(), { withSystem: true });
+  assert.equal(sim.stockOutlook(calm).emptyIn, null);
+
+  const state = sim.createSim(config, { withSystem: false });
+  stepUntil(state, (s) => s.region.status === "KRISIS");
+  const outlook = sim.stockOutlook(state);
+  assert.ok(outlook.criticalIn !== null, "stok menembus batas kritis");
+  assert.ok(outlook.emptyIn === null || outlook.emptyIn >= outlook.criticalIn);
+  assert.ok(outlook.critical > 0);
+});

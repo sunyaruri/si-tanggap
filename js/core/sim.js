@@ -210,6 +210,12 @@
 
   const servedFactor = (f) => f.normal + f.panicServed + f.hoardServed;
 
+  /** Permintaan total terhadap konsumsi normal, termasuk yang ditahan kuota dan kunci POS. */
+  function demandRatio(sim) {
+    const f = demandFactors(sim);
+    return f.normal + f.panicServed + f.panicBlocked + f.hoardServed + f.hoardBlocked;
+  }
+
   function updateSources(sim) {
     const { supply, scenario } = sim.cfg;
     const disrupted = isDisrupted(sim);
@@ -915,6 +921,24 @@
     return true;
   }
 
+  /**
+   * Kapan stok wilayah (termasuk truk di jalan) menembus batas kritis dan kapan habis,
+   * dalam jam dari sekarang; null bila tidak terjadi dalam rentang proyeksi.
+   */
+  function stockOutlook(sim, hours = 48) {
+    const input = projectionInput(sim);
+    const critical = input.demandKLh * sim.cfg.ews.stockCriticalHours;
+    const points = projectStock(input, hours);
+    const crossing = points.find((point) => point.stockKL < critical);
+    const empty = points.find((point) => point.stockKL <= 0);
+    return {
+      critical,
+      points,
+      criticalIn: crossing ? crossing.h : null,
+      emptyIn: empty ? empty.h : null,
+    };
+  }
+
   ns.sim = {
     createSim,
     step,
@@ -927,10 +951,12 @@
     metrics,
     projectStock,
     projectionInput,
+    stockOutlook,
     pointAlong,
     truckPosition,
     isDisrupted,
     addReport,
+    demandRatio,
     slaCompliance,
     setCrisisQuota,
     logEvent: addLog,

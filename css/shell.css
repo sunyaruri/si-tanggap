@@ -317,7 +317,7 @@ body.is-shot .page {
 .status-banner.is-warn {
   border: 1px solid var(--border);
   background: var(--surface);
-  box-shadow: inset 4px 0 0 var(--warn);
+  border-color: var(--warn);
 }
 
 .status-banner.is-ok {
@@ -863,4 +863,136 @@ a.btn {
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
+}
+
+/* Status menempel di baris judul banner sebagai chip, bukan label di atas judul. */
+.status-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.status-banner .status-title h2 {
+  margin: 0;
+}
+
+.status-banner .status-tag {
+  flex: none;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.status-banner.is-crit .status-tag {
+  background: #fff;
+  color: var(--crit-ink);
+}
+
+.status-banner.is-crit .status-tag .shape {
+  color: var(--crit);
+}
+
+.status-banner.is-warn .status-tag {
+  border: 1px solid var(--warn);
+  background: var(--surface);
+  color: var(--warn-ink);
+}
+
+.status-banner.is-ok .status-tag {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ok-ink);
+}
+
+/* WASPADA: garis tepi 1px amber, tanpa garis kiri tebal. */
+.status-banner.is-warn {
+  border-color: var(--warn);
+  box-shadow: none;
+}
+
+.status-lead p {
+  margin-top: 6px;
+}
+
+.status-banner .status-facts {
+  margin-top: 12px;
+}
+
+/* Bilah "Batalkan" untuk aksi penting; di atas dock simulasi. */
+.undo-bar {
+  position: fixed;
+  bottom: calc(112px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  z-index: 1300;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 10px 10px 16px;
+  border-radius: 10px;
+  background: var(--n900);
+  box-shadow: 0 10px 28px rgb(12 18 24 / 0.28);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 8px);
+  transition:
+    opacity 0.18s ease-out,
+    transform 0.18s ease-out;
+}
+
+.undo-bar.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+}
+
+body.is-shot .undo-bar {
+  bottom: 24px;
+}
+
+.undo-left {
+  color: var(--n300);
+  font-variant-numeric: tabular-nums;
+}
+
+.undo-bar .btn {
+  height: 34px;
+  border-color: #fff;
+  background: #fff;
+  color: var(--n900);
+}
+
+/* Dasar keputusan di atas daftar rekomendasi. */
+.basis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.basis .basis-title {
+  flex-basis: 100%;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+/* Permukaan bawaan browser ikut palet. */
+::selection {
+  background: var(--b100);
+  color: var(--n900);
+}
+
+input,
+textarea {
+  caret-color: var(--b600);
 }

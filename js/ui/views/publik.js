@@ -295,10 +295,10 @@
 
   /** Waktu laporan masuk dan, untuk hoaks, status klarifikasinya. */
   function reportStatus(report) {
-    if (report.type !== "hoaks") return ui.stamp(report.t);
+    if (report.type !== "hoaks") return ui.when(report.t);
     return report.clarifiedAt === null
-      ? `${ui.stamp(report.t)} · sedang dicek`
-      : `${ui.stamp(report.t)} · diklarifikasi ${ui.clock(report.clarifiedAt)}`;
+      ? `${ui.when(report.t)} · sedang dicek`
+      : `${ui.when(report.t)} · diklarifikasi ${ui.clock(report.clarifiedAt)}`;
   }
 
   function reportsHTML(sim) {

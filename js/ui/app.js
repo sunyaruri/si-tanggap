@@ -89,10 +89,12 @@
   }
 
   function start(sim) {
+    // Aksi yang masih di jendela Batalkan diselesaikan pada simulasi lama, bukan simulasi baru.
+    ui.settleUndo();
     app.sim = sim;
     app.playing = false;
     app.pausedOnCrisis = sim.region.status === "KRISIS";
-    views.pos.reset();
+    views.pos.reset(sim);
     // Simulasi baru: bangun ulang tampilan aktif supaya tidak memegang data simulasi lama.
     if (app.view) app.view.destroy();
     app.view = null;

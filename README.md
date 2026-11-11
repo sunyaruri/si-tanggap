@@ -19,7 +19,7 @@ Prototipe web untuk penelitian SI-TANGGAP: tata kelola krisis distribusi BBM di 
 | Info publik (ponsel) | `#publik` |
 | Hasil simulasi | `#hasil` |
 
-Adegan siap pakai untuk tangkapan layar: tambahkan `?adegan=normal|waspada|krisis|respons|pulih` sebelum tanda `#`, dan `&shot=1` untuk menyembunyikan bilah demo dan kontrol simulasi. Contoh: `index.html?adegan=krisis&shot=1#pemda/ringkasan`.
+Adegan siap pakai untuk tangkapan layar: tambahkan `?adegan=normal|waspada|krisis|blokir|pengalihan|respons|pulih` sebelum tanda `#` (`blokir`: POS menolak kendaraan berjeriken; `pengalihan`: permintaan pengalihan menunggu Pertamina), dan `&shot=1` untuk menyembunyikan bilah demo dan kontrol simulasi. Contoh: `index.html?adegan=krisis&shot=1#pemda/ringkasan`.
 
 ## Tes
 

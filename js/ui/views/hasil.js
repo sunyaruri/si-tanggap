@@ -362,7 +362,7 @@
       },
       {
         name: BASELINE_NAME,
-        sub: "status tidak terpantau",
+        sub: "kondisi sebenarnya",
         points: data.base.series.map((point) => [point.t, point.status]),
         marks: [
           {
@@ -404,6 +404,16 @@
         x1: end,
         xTicks,
         band,
+        spans:
+          mBase.firstEmptyAt !== null && mSystem.waspadaAt !== null
+            ? [
+                {
+                  from: mSystem.waspadaAt,
+                  to: mBase.firstEmptyAt,
+                  label: `jendela peringatan ${span(mBase.firstEmptyAt - mSystem.waspadaAt)}`,
+                },
+              ]
+            : [],
         statusWord: STATUS_WORD,
         ariaLabel:
           "Linimasa status wilayah per jam, dengan dan tanpa SI-TANGGAP",

@@ -198,16 +198,17 @@
     action,
   }) {
     const meta = STATUS[status];
-    const factsHTML = facts.length
-      ? `<div class="status-facts">${facts.map((fact) => `<span>${icon(fact.icon, 15)}${esc(fact.text)}</span>`).join("")}</div>`
+    // "sejak …" jadi fakta pertama; status menempel di baris judul, bukan label di atasnya.
+    const allFacts = since ? [{ icon: "clock", text: since }, ...facts] : facts;
+    const factsHTML = allFacts.length
+      ? `<div class="status-facts">${allFacts.map((fact) => `<span>${icon(fact.icon, 15)}${esc(fact.text)}</span>`).join("")}</div>`
       : "";
     const deadlineHTML = deadline
       ? `<div class="status-deadline"><small>${esc(deadline.label)}</small><strong>${esc(deadline.value)}</strong>${deadline.note ? `<em>${esc(deadline.note)}</em>` : ""}</div>`
       : "";
     return `<section class="status-banner ${BANNER_CLASS[status]}" aria-label="Status wilayah">
       <div class="status-lead">
-        <span class="status-tag">${shape(meta.shape)}${esc(status)}${since ? ` <span>· ${esc(since)}</span>` : ""}</span>
-        <h2>${esc(title)}</h2>
+        <div class="status-title"><span class="status-tag">${shape(meta.shape)}${esc(status)}</span><h2>${esc(title)}</h2></div>
         ${text ? `<p>${esc(text)}</p>` : ""}
         ${factsHTML}
       </div>
@@ -281,6 +282,62 @@
     return seriesColors[index];
   }
 
+  // Jendela "Batalkan": aksi penting ditunda beberapa detik (onCommit) atau dijalankan lalu bisa
+  // dipulihkan (onUndo). Hanya satu yang berjalan; aksi baru menuntaskan yang sebelumnya dulu.
+  let pendingUndo = null;
+
+  function undoBar() {
+    let bar = document.getElementById("undo");
+    if (bar) return bar;
+    bar = document.createElement("div");
+    bar.id = "undo";
+    bar.className = "undo-bar";
+    bar.setAttribute("role", "status");
+    bar.setAttribute("aria-live", "polite");
+    bar.addEventListener("click", (event) => {
+      if (!event.target.closest("[data-undo]") || !pendingUndo) return;
+      const state = pendingUndo;
+      pendingUndo = null;
+      clearInterval(state.timer);
+      bar.classList.remove("is-visible");
+      state.onUndo();
+      toast("Dibatalkan.");
+    });
+    document.body.append(bar);
+    return bar;
+  }
+
+  function settleUndo() {
+    if (!pendingUndo) return;
+    const state = pendingUndo;
+    pendingUndo = null;
+    clearInterval(state.timer);
+    document.getElementById("undo")?.classList.remove("is-visible");
+    state.onCommit();
+  }
+
+  /** @param {{ text: string, seconds?: number, onCommit?: () => void, onUndo?: () => void }} opts */
+  function undoable({
+    text,
+    seconds = 8,
+    onCommit = () => {},
+    onUndo = () => {},
+  }) {
+    settleUndo();
+    const bar = undoBar();
+    const state = { left: seconds, onCommit, onUndo, timer: 0 };
+    bar.innerHTML = `<span>${esc(text)}</span><span class="undo-left">${seconds} dtk</span><button type="button" class="btn" data-undo>Batalkan</button>`;
+    bar.classList.add("is-visible");
+    state.timer = setInterval(() => {
+      state.left -= 1;
+      if (state.left <= 0) settleUndo();
+      else setText(bar.querySelector(".undo-left"), `${state.left} dtk`);
+    }, 1000);
+    pendingUndo = state;
+  }
+
+  const undoPending = () => pendingUndo !== null;
+
   let toastTimer = 0;
   function toast(text) {
     const el = document.getElementById("toast");
@@ -322,6 +379,9 @@
     filterHTML,
     slaInfo,
     seriesColor,
+    undoable,
+    undoPending,
+    settleUndo,
     toast,
   };
 })((globalThis.SiTanggap = globalThis.SiTanggap || {}));

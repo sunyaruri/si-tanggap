@@ -2,9 +2,9 @@
    Warna jalur status memakai turunan terang dari tanda status tema v2. */
 
 .hasil {
-  --lane-normal: #a8dfcd;
-  --lane-waspada: #f4d6a6;
-  --lane-krisis: #e2a3a7;
+  --lane-normal: #cdeee2;
+  --lane-waspada: #e49921;
+  --lane-krisis: #b71824;
 }
 
 .hasil .app-icon {

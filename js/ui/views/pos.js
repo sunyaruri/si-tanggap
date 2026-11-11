@@ -89,7 +89,8 @@
     };
   }
 
-  function reset() {
+  /** @param {any} [sim] adegan "blokir" membuka kendaraan berjeriken untuk tangkapan layar. */
+  function reset(sim) {
     desk.rnd = engine.random(config.seed + 7);
     desk.ledger = new Map();
     desk.day = 1;
@@ -98,6 +99,8 @@
     desk.liters = 0;
     desk.current = makeVehicle();
     desk.queue = Array.from({ length: QUEUE_SIZE }, makeVehicle);
+    if (sim && sim.scene === "blokir")
+      desk.current = { ...desk.current, jerrycan: true, modifiedTank: false };
   }
 
   function advance() {
@@ -345,19 +348,47 @@
       const action = event.target.closest("[data-action]")?.dataset.action;
       if (!action) return;
       const decision = decide(desk.current, app.sim);
-      if (action === "fill" && decision.allowed) {
-        const liters = litersFor(desk.current, decision);
-        desk.ledger.set(desk.current.plate, used(desk.current) + liters);
+      if (action !== "reject" && !(action === "fill" && decision.allowed)) return;
+      // Simpan keadaan meja supaya transaksi bisa dibatalkan beberapa detik.
+      const vehicle = desk.current;
+      const before = {
+        current: vehicle,
+        queue: [...desk.queue],
+        served: desk.served,
+        rejected: desk.rejected,
+        liters: desk.liters,
+        usedBefore: desk.ledger.get(vehicle.plate),
+      };
+      let text;
+      if (action === "fill") {
+        const liters = litersFor(vehicle, decision);
+        desk.ledger.set(vehicle.plate, used(vehicle) + liters);
         desk.served += 1;
         desk.liters += liters;
-      } else if (action === "reject") {
-        desk.rejected += 1;
+        text = `${vehicle.plate} · diisi ${num(liters)} L`;
       } else {
-        return;
+        desk.rejected += 1;
+        text = `${vehicle.plate} · ditolak`;
       }
       advance();
       r.plateError.textContent = "";
       app.render();
+      ui.undoable({
+        text,
+        seconds: 5,
+        onUndo() {
+          Object.assign(desk, {
+            current: before.current,
+            queue: before.queue,
+            served: before.served,
+            rejected: before.rejected,
+            liters: before.liters,
+          });
+          if (before.usedBefore === undefined) desk.ledger.delete(vehicle.plate);
+          else desk.ledger.set(vehicle.plate, before.usedBefore);
+          app.render();
+        },
+      });
     });
 
     r.correction.addEventListener("submit", (event) => {

@@ -55,9 +55,33 @@ test("adegan yang tidak dikenal tidak membuat simulasi", () => {
   assert.equal(scenes.createScene(config, "tidak-ada"), null);
 });
 
-test("daftar adegan berurutan dari normal sampai pulih", () => {
+test("daftar adegan mengikuti alur krisis dari normal sampai pulih", () => {
   assert.deepEqual(
     scenes.list.map((scene) => scene.id),
-    ["normal", "waspada", "krisis", "respons", "pulih"],
+    [
+    "normal",
+    "waspada",
+    "krisis",
+    "blokir",
+    "pengalihan",
+    "respons",
+    "pulih",
+  ],
   );
+});
+
+test("adegan pengalihan: kebijakan KRISIS disetujui, permintaan pengalihan menunggu Pertamina", () => {
+  const state = scenes.createScene(config, "pengalihan");
+  assert.equal(state.region.status, "KRISIS");
+  assert.notEqual(state.policy.KRISIS, null);
+  assert.ok(state.diversion, "permintaan pengalihan sudah dibuat");
+  assert.equal(state.diversion.approvedAt, null);
+  assert.equal(state.scene, "pengalihan");
+});
+
+test("adegan blokir: keadaan krisis yang ditandai untuk POS jeriken", () => {
+  const state = scenes.createScene(config, "blokir");
+  assert.equal(state.region.status, "KRISIS");
+  assert.equal(state.crisisMode.active, true);
+  assert.equal(state.scene, "blokir");
 });

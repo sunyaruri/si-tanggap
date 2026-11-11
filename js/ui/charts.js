@@ -250,14 +250,14 @@
     return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><path d="${d}L${W} ${H}L0 ${H}Z" fill="${color}" opacity="${AREA_OPACITY}"/><path d="${d}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
   }
 
-  // Warna isian lajur status: dibuat lebih muda dari warna status agar blok besar tidak menyilaukan;
-  // label teks di dalam blok dan legenda bentuk tetap menjadi penanda utama.
+  // Warna lajur status: tiga tingkat terang yang berbeda (muda, sedang, gelap) supaya tetap
+  // terbedakan saat paper dicetak hitam-putih; KRISIS merah solid seperti banner. Kontras teks ≥ 4,5:1.
   const LANE_FILL = {
-    NORMAL: "#a8dfcd",
-    WASPADA: "#f4d6a6",
-    KRISIS: "#e2a3a7",
+    NORMAL: "#cdeee2",
+    WASPADA: "#e49921",
+    KRISIS: "#b71824",
   };
-  const LANE_INK = { NORMAL: "#1a6d52", WASPADA: "#8b551c", KRISIS: "#a51e27" };
+  const LANE_INK = { NORMAL: "#1a6d52", WASPADA: "#2a1a05", KRISIS: "#ffffff" };
   const LANE_LABEL_MIN_PX = 64;
   const MARK_MIN_GAP_PX = 120;
   const MARK_CHAR_PX = 6.8; // perkiraan lebar satu karakter label penanda (11,5px tebal)
@@ -290,6 +290,7 @@
    * @param {HTMLElement} el
    * @param {{lanes: {name: string, sub: string, points: [number, string][], marks: {x: number, label: string}[]}[],
    *   x0: number, x1: number, xTicks: {x: number, label: string}[], band?: {from: number, to: number, label: string},
+   *   spans?: {from: number, to: number, label: string}[],
    *   statusWord: Record<string, string>, ariaLabel: string}} opts
    */
   function statusLanes(el, opts) {
@@ -300,7 +301,8 @@
     const laneH = 34;
     const markH = 24;
     const laneGap = 28;
-    const top = 26;
+    const spanRow = opts.spans && opts.spans.length ? 26 : 0;
+    const top = 26 + spanRow;
     const plotW = width - labelW - right;
     const px = (x) => labelW + ((x - opts.x0) / (opts.x1 - opts.x0)) * plotW;
     const laneBlock = markH + laneH + laneGap;
@@ -308,6 +310,14 @@
     const height = top + opts.lanes.length * laneBlock + 14;
 
     let svg = HATCH;
+    // Rentang penting (mis. jendela peringatan): kurung di baris atas + sorotan tipis di semua lajur.
+    for (const span of opts.spans || []) {
+      const sx0 = px(span.from);
+      const sx1 = px(span.to);
+      svg += `<rect x="${sx0}" y="${top - 6}" width="${sx1 - sx0}" height="${height - top - 14}" fill="#006cb8" opacity="0.08"/>`;
+      svg += `<path d="M${sx0} 22v-6h${sx1 - sx0}v6" fill="none" stroke="#006cb8" stroke-width="1.5"/>`;
+      svg += `<text class="span-label" x="${(sx0 + sx1) / 2}" y="11" text-anchor="middle">${esc(span.label)}</text>`;
+    }
     if (opts.band) {
       const bx0 = px(opts.band.from);
       const bx1 = px(opts.band.to);

@@ -52,6 +52,23 @@
         runUntil(sim, reached("KRISIS"), false) && advance(sim, 1.5, false),
     },
     {
+      id: "blokir",
+      label: "POS memblokir jeriken",
+      // Keadaan sama dengan adegan krisis; tampilan POS membuka kendaraan berjeriken.
+      play: (sim) =>
+        runUntil(sim, reached("KRISIS"), false) && advance(sim, 1.5, false),
+    },
+    {
+      id: "pengalihan",
+      label: "Pengalihan menunggu Pertamina",
+      // Pemda menyetujui satu jam setelah KRISIS; permintaan pengalihan belum dijawab Pertamina.
+      play: (sim) =>
+        runUntil(sim, reached("KRISIS"), false) &&
+        advance(sim, 1, false) &&
+        engine.approvePolicy(sim) &&
+        advance(sim, 0.5, false),
+    },
+    {
       id: "respons",
       label: "Kebijakan & pengalihan berjalan",
       play: (sim) =>
@@ -73,6 +90,7 @@
     if (!scene) return null;
     const sim = engine.createSim(cfg, { withSystem: true });
     scene.play(sim);
+    sim.scene = id;
     return sim;
   }
 

@@ -124,10 +124,9 @@
   box-shadow: 0 6px 16px rgb(7 40 69 / 0.12);
 }
 
+/* WASPADA: garis tepi 1px amber, tanpa garis kiri tebal. */
 .publik .status-card.tone-warn {
-  box-shadow:
-    inset 4px 0 0 var(--warn),
-    0 6px 16px rgb(7 40 69 / 0.12);
+  border-color: var(--warn);
 }
 
 .publik .status-card.tone-crit {

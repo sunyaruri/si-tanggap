@@ -315,7 +315,7 @@
         ${kpi({ ref: "waspada", label: "Wilayah WASPADA", iconName: "bell", sub: "dari 1 wilayah dipantau" })}
         ${kpi({ ref: "trucks", label: "Truk tangki di jalan", iconName: "truck", sub: "menuju SPBU Kab. Jember" })}
         ${kpi({ ref: "request", label: "Permintaan Pemda menunggu", iconName: "landmark" })}
-        ${kpi({ ref: "sla", label: "Kepatuhan SLA", iconName: "clock" })}
+        ${kpi({ ref: "sla", label: "Respons ke permintaan Pemda", iconName: "clock" })}
       </section>
       <div class="cols cols-2-1">
         ${panel({ iconName: "warehouse", title: "Stok terminal", hint: "ketahanan dalam hari", link: { page: "terminal", label: "Detail" }, body: '<div class="terms" data-ref="terminals"></div>' })}
@@ -398,22 +398,23 @@
         );
         r.requestCard.dataset.tone = waiting ? "warn" : "";
 
-        // Dokumen alur meminta kepatuhan SLA 30 hari; simulasi hanya 14 hari, jadi dihitung selama simulasi.
-        const sla = engine.slaCompliance(sim);
-        setText(
-          r.sla,
-          sla.total ? `${num((sla.onTime / sla.total) * 100)}%` : "–",
-        );
-        r.slaCard.dataset.tone =
-          sla.total && sla.onTime < sla.total ? "crit" : "";
-        setText(
-          r.slaSub,
-          sla.total
-            ? `${num(sla.onTime)} dari ${num(sla.total)} keputusan tepat waktu`
-            : sla.pending
-              ? "keputusan pertama sedang berjalan"
-              : "belum ada keputusan yang dinilai",
-        );
+        // SLA milik Pertamina: waktu dari permintaan pengalihan Pemda sampai disetujui (target bersama < 24 jam).
+        const diversion = sim.diversion;
+        const target = sim.cfg.slaHours.KRISIS;
+        if (!diversion) {
+          setText(r.sla, "–");
+          setText(r.slaSub, "belum ada permintaan Pemda");
+          r.slaCard.dataset.tone = "";
+        } else if (diversion.approvedAt === null) {
+          setText(r.sla, span(sim.t - diversion.requestedAt));
+          setText(r.slaSub, `menunggu sejak ${when(diversion.requestedAt)}`);
+          r.slaCard.dataset.tone = "warn";
+        } else {
+          const took = diversion.approvedAt - diversion.requestedAt;
+          setText(r.sla, span(took));
+          setText(r.slaSub, took <= target ? `tepat SLA, target < ${num(target)} jam` : `melewati target ${num(target)} jam`);
+          r.slaCard.dataset.tone = took <= target ? "" : "crit";
+        }
 
         setHTML(r.terminals, terminalsHTML(sim, { compact: true }));
         setHTML(r.todo, todoHTML(sim));
@@ -643,6 +644,27 @@
     };
   }
 
+  /** Stok terminal donor sekarang → sesudah pengalihan, dalam hari ketahanan. */
+  function donorChip(sim, item) {
+    const index = config.terminals.findIndex((terminal) => terminal.id === item.terminalId);
+    const terminal = sim.terminals[index];
+    const base = config.terminals[index];
+    if (!terminal || !base) return "";
+    const after = terminal.stockKL / (base.outKLday + item.kLday);
+    return `<span class="chip">stok ${esc(TERMINAL_SHORT[item.terminalId] || item.name)} <b>${num(terminal.days, 1)} → ${num(after, 1)} hari</b></span>`;
+  }
+
+  /** Perlombaan yang diputuskan dispatcher: truk pengalihan pertama vs stok SPBU Jember habis. */
+  function raceHTML(sim, diversion) {
+    const fastest = Math.min(...diversion.plan.map((item) => item.leadHours));
+    const outlook = engine.stockOutlook(sim);
+    const arrive = diversion.approvedAt === null ? sim.t + fastest : diversion.approvedAt + fastest;
+    const empty = outlook.emptyIn === null ? null : sim.t + outlook.emptyIn;
+    const lines = [`Truk pengalihan pertama tiba ≈ ${when(arrive)}`];
+    lines.push(empty === null ? "Stok SPBU Jember tidak habis dalam 48 jam" : `Stok SPBU Jember habis ≈ ${when(empty)}`);
+    return `<div class="basis"><span class="basis-title">Bila disetujui sekarang</span>${lines.map((text) => `<span class="chip">${esc(text)}</span>`).join("")}</div>`;
+  }
+
   function pengalihanPage(el, { app }) {
     const spare = config.terminals.filter((terminal) => !terminal.primary);
     el.innerHTML = `
@@ -662,6 +684,7 @@
         })}
       </div>`;
     const r = refs(el);
+    let approving = false;
 
     el.addEventListener("click", (event) => {
       if (
@@ -669,9 +692,23 @@
         "approve-diversion"
       )
         return;
-      if (engine.approveDiversion(app.sim))
-        toast("Pengalihan disetujui. Perintah kirim diteruskan ke terminal.");
+      if (approving) return;
+      approving = true;
       app.render();
+      ui.undoable({
+        text: "Pengalihan disetujui, perintah kirim ke terminal",
+        seconds: 8,
+        onCommit() {
+          approving = false;
+          if (engine.approveDiversion(app.sim))
+            toast("Pengalihan disetujui. Perintah kirim diteruskan ke terminal.");
+          app.render();
+        },
+        onUndo() {
+          approving = false;
+          app.render();
+        },
+      });
     });
 
     function view(sim) {
@@ -693,6 +730,7 @@
           (item) => `<div class="route-card">
             <div class="route-line">${icon("warehouse", 16)}${esc(item.name)}${icon("arrow", 16)}Kab. Jember</div>
             <div class="route-chips">
+              ${donorChip(sim, item)}
               <span class="chip"><b>${num(item.kLday)}</b>KL per hari</span>
               <span class="chip">${icon("clock", 13)}tiba<b>±${num(item.leadHours)} jam</b></span>
               <span class="chip">biaya <b>+${num(item.costPct)}%</b></span>
@@ -700,11 +738,11 @@
           </div>`,
         )
         .join("");
-      const body = `<div class="plan-need"><b>Jember butuh tambahan ${num(diversion.deficitKLday)} KL per hari</b><span class="note">Perlu ${num(diversion.trucks)} truk tangki tambahan.</span></div>${cards}`;
+      const body = `<div class="plan-need"><b>Jember butuh tambahan ${num(diversion.deficitKLday)} KL per hari</b><span class="note">Perlu ${num(diversion.trucks)} truk tangki tambahan.</span></div>${raceHTML(sim, diversion)}${cards}`;
       const foot =
         diversion.approvedAt === null
-          ? `<button type="button" class="btn btn-primary" data-action="approve-diversion">${icon("check", 17)}Setujui pengalihan</button><span class="note">Diminta Pemda ${esc(when(diversion.requestedAt))}</span>`
-          : `<span class="pill tone-ok">${shape("circle")}Disetujui ${esc(when(diversion.approvedAt))}</span><span class="note">Perintah kirim sudah diteruskan ke terminal.</span>`;
+          ? `<button type="button" class="btn btn-primary" data-action="approve-diversion"${approving ? " disabled" : ""}>${icon("check", 17)}Setujui pengalihan</button><span class="note">${approving ? "Dikirim dalam beberapa detik. Bisa dibatalkan di bilah bawah." : `Diminta Pemda ${esc(when(diversion.requestedAt))} · menunggu ${esc(span(sim.t - diversion.requestedAt))}`}</span>`
+          : `<span class="pill tone-ok">${shape("circle")}Disetujui ${esc(when(diversion.approvedAt))}</span><span class="note">Diminta ${esc(when(diversion.requestedAt))}, disetujui ${esc(span(diversion.approvedAt - diversion.requestedAt))} kemudian. Perintah kirim sudah diteruskan.</span>`;
       return { body, foot };
     }
 
@@ -757,13 +795,28 @@
       const quota = {};
       for (const key of Object.keys(config.quota))
         quota[key] = Number(fields[key].value);
-      if (!engine.setCrisisQuota(app.sim, quota)) {
+      // Validasi saja di sini; kuota baru diterapkan setelah jendela Batalkan habis.
+      const valid = Object.values(quota).every(
+        (liters) => Number.isInteger(liters) && liters >= 1 && liters <= 200,
+      );
+      if (!valid) {
         r.paramsError.textContent = "Isi tiap kuota dengan angka bulat 1–200.";
         return;
       }
       r.paramsError.textContent = "";
-      toast("Kuota krisis diterapkan ke semua POS wilayah.");
-      app.render();
+      ui.undoable({
+        text: `Kuota ${quota.motor}/${quota.mobil}/${quota.niaga} L diterapkan ke semua POS`,
+        seconds: 6,
+        onCommit() {
+          engine.setCrisisQuota(app.sim, quota);
+          toast("Kuota krisis diterapkan ke semua POS wilayah.");
+          app.render();
+        },
+        onUndo() {
+          for (const key of Object.keys(config.quota))
+            fields[key].value = app.sim.crisisMode.quota[key];
+        },
+      });
     });
 
     return {
@@ -781,21 +834,34 @@
   function inboxPage(el, { app }) {
     el.innerHTML = `
       <div class="cols cols-2-1">
-        ${panel({ iconName: "inbox", title: "Kotak masuk", hint: "terbaru di atas", body: '<ul class="inbox" data-ref="inbox"></ul>', foot: `<button type="button" class="btn" data-action="forward" data-ref="forward">${icon("send", 16)}Teruskan ke Satgas</button><span class="note">Tim audit dan Satgas BBM menerima salinan semua pesan.</span>` })}
+        ${panel({ iconName: "inbox", title: "Kotak masuk", hint: "permintaan, anomali, dan laporan warga", body: '<ul class="inbox" data-ref="inbox"></ul>', foot: `<button type="button" class="btn" data-action="forward" data-ref="forward">${icon("send", 16)}Teruskan ke Satgas</button><span class="note" data-ref="forwardNote"></span>` })}
         ${panel({ iconName: "list", title: "Jenis pesan", body: '<div class="risk-list" data-ref="kinds"></div>' })}
       </div>`;
     const r = refs(el);
+    let forwarding = false;
+    let forwardedAt = null;
 
     el.addEventListener("click", (event) => {
       if (event.target.closest("[data-action]")?.dataset.action !== "forward")
         return;
-      engine.logEvent(
-        app.sim,
-        "report",
-        "Temuan diteruskan ke tim audit / Satgas",
-      );
-      toast("Temuan diteruskan ke tim audit dan Satgas.");
-      app.render();
+      if (forwarding) return;
+      forwarding = true;
+      r.forward.disabled = true;
+      ui.undoable({
+        text: "Temuan diteruskan ke tim audit / Satgas",
+        seconds: 6,
+        onCommit() {
+          forwarding = false;
+          engine.logEvent(app.sim, "report", "Temuan diteruskan ke tim audit / Satgas");
+          forwardedAt = app.sim.t;
+          toast("Temuan diteruskan ke tim audit dan Satgas.");
+          app.render();
+        },
+        onUndo() {
+          forwarding = false;
+          r.forward.disabled = false;
+        },
+      });
     });
 
     const KINDS = [
@@ -823,7 +889,15 @@
       update(sim) {
         const items = inboxItems(sim);
         setHTML(r.inbox, inboxHTML(items));
-        r.forward.disabled = items.length === 0;
+        r.forward.disabled = items.length === 0 || forwarding;
+        setText(
+          r.forwardNote,
+          forwarding
+            ? "Mengirim… bisa dibatalkan di bilah bawah."
+            : forwardedAt !== null
+              ? `Terakhir diteruskan ${when(forwardedAt)}.`
+              : "Tim audit dan Satgas BBM menerima salinannya.",
+        );
         setHTML(
           r.kinds,
           KINDS.map(
@@ -858,7 +932,7 @@
         {
           label: "Tindakan",
           items: [
-            { id: "pengalihan", label: "Pengalihan pasokan", icon: "route" },
+            { id: "pengalihan", label: "Pengalihan", icon: "route" },
             { id: "kuota", label: "Kuota krisis POS", icon: "sliders" },
             { id: "inbox", label: "Kotak masuk", icon: "inbox" },
           ],

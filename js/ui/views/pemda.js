@@ -12,9 +12,7 @@
     setHTML,
     setText,
     refs,
-    stamp,
     when,
-    countdown,
     span,
     kpi,
     toast,
@@ -50,13 +48,17 @@
     const region = sim.region;
     const th = sim.cfg.ews;
     if (region.status === "NORMAL") return "Pasokan BBM normal";
+    if (sim.diversion && sim.diversion.approvedAt !== null)
+      return "Pasokan tambahan sedang dikirim";
     if (region.r < th.rKrisis) return "Stok BBM akan habis sebelum truk tiba";
     if (region.criticalShare >= th.criticalShareKrisis)
       return "Banyak SPBU hampir kehabisan stok";
     if (region.r < th.rNormal) return "Stok BBM mulai menipis";
     if (region.consumptionRatio > th.consumptionWaspada)
       return "Pembelian BBM naik di atas normal";
-    return "Indikator mulai membaik";
+    if (sim.policy.KRISIS || sim.policy.WASPADA)
+      return "Kebijakan darurat sudah berlaku";
+    return "Status turun setelah stabil 24 jam";
   }
 
   function bannerText(sim) {
@@ -107,9 +109,9 @@
         note: when(info.sla.deadlineAt),
       };
     return {
-      label: "Batas keputusan",
-      value: countdown(info.remaining).replaceAll(" ", ""),
-      note: when(info.sla.deadlineAt),
+      label: "Sisa waktu keputusan",
+      value: span(info.remaining),
+      note: `batas ${when(info.sla.deadlineAt)}`,
     };
   }
 
@@ -196,6 +198,28 @@
     return `${num(s.hoursLeft)} jam`;
   }
 
+  const pct = (ratio) => {
+    const value = Math.round((ratio - 1) * 100);
+    return value === 0 ? "0%" : `${value > 0 ? "+" : "−"}${num(Math.abs(value))}%`;
+  };
+
+  /** Permintaan termasuk yang ditahan kuota; penjualan turun saat stok habis, jadi hanya jadi keterangan. */
+  function demandKpi(r, sim) {
+    const demand = engine.demandRatio(sim);
+    setText(r.consumption, pct(demand));
+    r.consumptionCard.dataset.tone =
+      demand > sim.cfg.ews.consumptionWaspada ? "warn" : "";
+    setText(r.consumptionSub, `penjualan 24 jam ${pct(sim.region.consumptionRatio)}`);
+  }
+
+  /** Waktu antre bergantung jam; yang dirasakan warga adalah puncaknya dalam 24 jam. */
+  function peakQueue(sim) {
+    const recent = sim.series
+      .filter((point) => point.t > sim.t - 24)
+      .map((point) => point.queueMinutes);
+    return Math.max(sim.region.queueMinutes, ...recent);
+  }
+
   // ---------- Halaman: Ringkasan ----------
 
   function trendText(sim) {
@@ -224,7 +248,7 @@
           count: ews.recommendations(pending, sim.cfg).length,
         }
       : approved
-        ? { title: "Rekomendasi sudah disetujui", sub: stamp(approved.at) }
+        ? { title: "Rekomendasi sudah disetujui", sub: when(approved.at) }
         : {
             title: "Belum ada rekomendasi",
             sub: "muncul otomatis saat ambang terlewati",
@@ -234,7 +258,7 @@
     const supply = !diversion
       ? {
           title: "Pengalihan pasokan",
-          sub: "diusulkan otomatis saat status KRISIS",
+          sub: "diajukan setelah rekomendasi KRISIS disetujui",
         }
       : diversion.approvedAt === null
         ? {
@@ -243,7 +267,7 @@
           }
         : {
             title: "Pengalihan pasokan berjalan",
-            sub: `disetujui Pertamina ${stamp(diversion.approvedAt)}`,
+            sub: `disetujui Pertamina ${when(diversion.approvedAt)}`,
           };
     const items = [
       { href: "#pemda/rekomendasi", iconName: "clipboard", ...rec },
@@ -285,8 +309,8 @@
           <section class="kpis" aria-label="Indikator utama">
             ${kpi({ ref: "critical", label: "SPBU stok < 6 jam", iconName: "fuel" })}
             ${kpi({ ref: "ratio", label: "Stok vs kedatangan truk", iconName: "gauge" })}
-            ${kpi({ ref: "queue", label: "Waktu antre", iconName: "users", sub: "rata-rata semua SPBU" })}
-            ${kpi({ ref: "consumption", label: "Penjualan vs normal", iconName: "trending", sub: "24 jam terakhir" })}
+            ${kpi({ ref: "queue", label: "Antre terlama", iconName: "users", sub: "puncak 24 jam terakhir" })}
+            ${kpi({ ref: "consumption", label: "Permintaan vs normal", iconName: "trending" })}
             ${kpi({ ref: "rejected", label: "Pengisian ditolak", iconName: "ban" })}
           </section>
           <div class="cols cols-2-1">
@@ -342,21 +366,8 @@
                 : "di atas 1,5: aman",
           );
 
-          setText(r.queue, ui.wait(region.queueMinutes));
-
-          const delta = (region.consumptionRatio - 1) * 100;
-          setText(
-            r.consumption,
-            `${delta >= 0 ? "+" : "−"}${num(Math.abs(delta))}%`,
-          );
-          r.consumptionCard.dataset.tone =
-            region.consumptionRatio > th.consumptionWaspada ? "warn" : "";
-          setText(
-            r.consumptionSub,
-            region.consumptionRatio > th.consumptionWaspada
-              ? "di atas ambang naik 20%"
-              : "24 jam terakhir",
-          );
+          setText(r.queue, ui.wait(peakQueue(sim)));
+          demandKpi(r, sim);
 
           setText(r.rejected, num(sim.totals.rejectedToday));
           setText(
@@ -474,11 +485,21 @@
 
   // ---------- Halaman: Proyeksi stok ----------
 
+  /** Tandai kapan stok menembus batas kritis dan kapan habis, supaya grafik menjawab "kapan". */
+  function projectionMarks(outlook, divertedEtas, sim) {
+    const marks = [];
+    if (outlook.criticalIn)
+      marks.push({ x: outlook.criticalIn, label: `kritis ≈ ${when(sim.t + outlook.criticalIn)}` });
+    if (outlook.emptyIn !== null)
+      marks.push({ x: outlook.emptyIn, label: `habis ≈ ${when(sim.t + outlook.emptyIn)}` });
+    if (divertedEtas.length)
+      marks.push({ x: Math.min(...divertedEtas), label: "truk pengalihan tiba" });
+    return marks;
+  }
+
   function drawProjection(el, sim) {
-    const input = engine.projectionInput(sim);
-    const points = engine
-      .projectStock(input, PROJECTION_HOURS)
-      .map((point) => [point.h, point.stockKL]);
+    const outlook = engine.stockOutlook(sim, PROJECTION_HOURS);
+    const points = outlook.points.map((point) => [point.h, point.stockKL]);
     const divertedEtas = sim.trucks
       .filter((truck) => truck.route === "malang" || truck.route === "surabaya")
       .map((truck) => truck.etaAt - sim.t);
@@ -491,15 +512,8 @@
       xTitle: "Jam ke depan",
       xFormat: (h) => `+${h} jam`,
       yFormat: (value) => `${num(value)} KL`,
-      levels: [
-        {
-          y: input.demandKLh * sim.cfg.ews.stockCriticalHours,
-          label: "batas kritis (6 jam konsumsi)",
-        },
-      ],
-      marks: divertedEtas.length
-        ? [{ x: Math.min(...divertedEtas), label: "truk pengalihan tiba" }]
-        : [],
+      levels: [{ y: outlook.critical, label: "batas kritis (6 jam konsumsi)" }],
+      marks: projectionMarks(outlook, divertedEtas, sim),
       area: true,
       height: 380,
       ariaLabel: "Proyeksi stok BBM wilayah 48 jam ke depan",
@@ -513,8 +527,8 @@
         el.innerHTML = `
           <section class="kpis is-4" aria-label="Stok wilayah">
             ${kpi({ ref: "stock", label: "Stok seluruh SPBU", iconName: "database", sub: "total 58 SPBU" })}
-            ${kpi({ ref: "cover", label: "Cukup untuk", iconName: "clock", sub: "pada laju penjualan sekarang" })}
-            ${kpi({ ref: "consumption", label: "Penjualan vs normal", iconName: "trending", sub: "24 jam terakhir" })}
+            ${kpi({ ref: "cover", label: "Cukup untuk, tanpa truk baru", iconName: "clock", sub: "pada laju penjualan sekarang" })}
+            ${kpi({ ref: "consumption", label: "Permintaan vs normal", iconName: "trending" })}
             ${kpi({ ref: "trucks", label: "Truk tangki di jalan", iconName: "truck", sub: "menuju SPBU Kab. Jember" })}
           </section>
           <article class="panel">
@@ -533,15 +547,7 @@
               : region.coverHours < sim.cfg.ews.stockSafeHours
                 ? "warn"
                 : "";
-          const delta = (region.consumptionRatio - 1) * 100;
-          setText(
-            r.consumption,
-            `${delta >= 0 ? "+" : "−"}${num(Math.abs(delta))}%`,
-          );
-          r.consumptionCard.dataset.tone =
-            region.consumptionRatio > sim.cfg.ews.consumptionWaspada
-              ? "warn"
-              : "";
+          demandKpi(r, sim);
           setText(r.trucks, num(sim.trucks.length));
           drawProjection(r.projection, sim);
         }
@@ -573,7 +579,7 @@
     }
     const tone = info.used > SLA_LOW_SHARE ? "crit" : "warn";
     return `<p class="sla-label">${esc(label)} · sisa waktu</p>
-      <p class="sla-value">${esc(countdown(info.remaining))}</p>
+      <p class="sla-value">${esc(span(info.remaining))}</p>
       <div class="progress tone-${tone}"><span style="width:${(info.used * 100).toFixed(1)}%"></span></div>
       <p class="note">Putuskan sebelum ${esc(when(info.sla.deadlineAt))}.</p>`;
   }
@@ -597,8 +603,26 @@
     return `<li><label class="${cls}">${input}<span class="box">${mark}</span><span class="rec-text"><span class="rec-title">${esc(item.label)}</span><span class="rec-pj">${esc(sub)}</span></span>${tag}</label></li>`;
   }
 
+  /** Dasar keputusan di layar yang sama dengan tombol Setujui: angka yang memicu rekomendasi. */
+  function basisHTML(sim) {
+    const region = sim.region;
+    const outlook = engine.stockOutlook(sim);
+    const facts = [
+      `Stok ÷ waktu tiba truk (R) ${num(Math.min(region.r, 99), 2)}`,
+      `${num(region.criticalCount)} dari ${num(sim.spbu.length)} SPBU stok < 6 jam`,
+    ];
+    if (engine.isDisrupted(sim)) {
+      const late = sim.cfg.supply.leadDisruptedHours - sim.cfg.supply.leadNormalHours;
+      facts.push(`truk telat ±${num(late)} jam (jalur Gumitir)`);
+    }
+    if (outlook.emptyIn !== null) facts.push(`stok wilayah habis ≈ ${when(sim.t + outlook.emptyIn)}`);
+    else if (outlook.criticalIn) facts.push(`stok kritis ≈ ${when(sim.t + outlook.criticalIn)}`);
+    return `<div class="basis"><span class="basis-title">Dasar rekomendasi</span>${facts.map((text) => `<span class="chip">${esc(text)}</span>`).join("")}</div>`;
+  }
+
   /** Catatan di kaki panel rekomendasi: apa yang terjadi bila disetujui sekarang. */
   function pendingNote(state, deferred) {
+    if (state.approving) return "Terbit dalam beberapa detik. Bisa dibatalkan di bilah bawah.";
     if (state.editing) return "Hapus centang butir yang tidak akan dijalankan.";
     if (deferred) return `Ditunda ${when(deferred.t)}. Batas waktu tetap berjalan.`;
     if (state.unchecked.size)
@@ -635,8 +659,8 @@
         : `<button type="button" class="btn" data-action="defer">${icon("pause2", 16)}Tunda</button>`;
       return {
         state: `${pill(pending)}${chip}`,
-        body: `<ul class="rec-list">${items}</ul>`,
-        foot: `<button type="button" class="btn btn-primary" data-action="approve">${icon("check", 17)}${action}</button>${edit}${defer}<span class="note">${esc(pendingNote(state, deferred))}</span>`,
+        body: `${basisHTML(sim)}<ul class="rec-list">${items}</ul>`,
+        foot: `<button type="button" class="btn btn-primary" data-action="approve"${state.approving ? " disabled" : ""}>${icon("check", 17)}${action}</button>${edit}${defer}<span class="note">${esc(pendingNote(state, deferred))}</span>`,
       };
     }
 
@@ -664,7 +688,7 @@
     return {
       state: `${pill(status)}<span class="chip">${icon("check", 14)}disetujui</span>`,
       body: `<ul class="rec-list">${items}</ul>`,
-      foot: `<span class="note">Disetujui ${esc(stamp(policy.at))} dan tercatat untuk audit SLA.</span>`,
+      foot: `<span class="note">Disetujui ${esc(when(policy.at))} dan tercatat untuk audit SLA.</span>`,
     };
   }
 
@@ -726,15 +750,29 @@
             state.editing = false;
             toast("Rekomendasi ditunda. Batas waktu SLA tetap berjalan.");
           } else if (action === "approve") {
+            if (state.approving) return;
             const ids = ews
               .recommendations(pending, app.sim.cfg)
               .map((item) => item.id)
               .filter((id) => !state.unchecked.has(id));
-            if (engine.approvePolicy(app.sim, ids))
-              toast("Rekomendasi disetujui dan tercatat waktunya.");
-            state.unchecked.clear();
+            state.approving = true;
             state.editing = false;
-            state.deferred = null;
+            ui.undoable({
+              text: pending === "KRISIS" ? `SE KRISIS terbit, ${ids.length} butir dijalankan` : `${ids.length} butir rekomendasi disetujui`,
+              seconds: 8,
+              onCommit() {
+                state.approving = false;
+                if (engine.approvePolicy(app.sim, ids))
+                  toast("Rekomendasi disetujui dan tercatat waktunya.");
+                state.unchecked.clear();
+                state.deferred = null;
+                app.render();
+              },
+              onUndo() {
+                state.approving = false;
+                app.render();
+              },
+            });
           } else return;
           app.render();
         });
@@ -771,7 +809,7 @@
             </div>
             <footer class="panel-foot">
               <button type="button" class="btn btn-primary" data-action="send-offenders" data-ref="send">${icon("send", 16)}Teruskan ke Satpol PP</button>
-              <span class="note">Daftar dikirim beserta SPBU dan alasan penolakan.</span>
+              <span class="note" data-ref="sendNote">Daftar dikirim beserta SPBU dan alasan penolakan.</span>
             </footer>
           </article>`;
         const r = refs(el);
@@ -785,13 +823,29 @@
         });
         el.addEventListener("click", (event) => {
           if (!event.target.closest('[data-action="send-offenders"]')) return;
-          engine.logEvent(
-            app.sim,
-            "report",
-            "Daftar kendaraan diduga menimbun dikirim ke Satpol PP / Polres",
-          );
-          toast("Daftar diteruskan ke Satpol PP / Polres.");
+          if (state.sending) return;
+          const count = offendersToday(app.sim).length;
+          state.sending = true;
           app.render();
+          ui.undoable({
+            text: `Daftar ${count} kendaraan dikirim ke Satpol PP / Polres`,
+            seconds: 6,
+            onCommit() {
+              state.sending = false;
+              engine.logEvent(
+                app.sim,
+                "report",
+                `Daftar ${count} kendaraan diduga menimbun dikirim ke Satpol PP / Polres`,
+              );
+              state.sent = { t: app.sim.t, count };
+              toast("Daftar diteruskan ke Satpol PP / Polres.");
+              app.render();
+            },
+            onUndo() {
+              state.sending = false;
+              app.render();
+            },
+          });
         });
 
         function update(sim) {
@@ -813,7 +867,20 @@
           );
           const pageInfo = ui.paginate(list, state.page, PER_PAGE.offenders);
           state.page = pageInfo.page;
-          r.send.disabled = all.length === 0;
+          r.send.disabled = all.length === 0 || Boolean(state.sending);
+          const fresh = state.sent ? all.length - state.sent.count : all.length;
+          setHTML(
+            r.send,
+            `${icon("send", 16)}${state.sent ? `Kirim pembaruan${fresh > 0 ? ` (${num(fresh)} baru)` : ""}` : "Teruskan ke Satpol PP"}`,
+          );
+          setText(
+            r.sendNote,
+            state.sending
+              ? "Mengirim… bisa dibatalkan di bilah bawah."
+              : state.sent
+                ? `Terkirim ${when(state.sent.t)} · ${num(state.sent.count)} kendaraan.`
+                : "Daftar dikirim beserta SPBU dan alasan penolakan.",
+          );
           if (pageInfo.rows.length === 0) {
             setHTML(
               r.table,
@@ -932,7 +999,7 @@
           }
           const items = pageInfo.rows.map((row) => {
             const style = logStyle(row);
-            return `<li class="tl-item"><span class="tl-dot tone-${style.tone}">${style.html}</span><div><p class="tl-text">${esc(row.text)}</p><p class="tl-time">${esc(stamp(row.t))}</p></div></li>`;
+            return `<li class="tl-item"><span class="tl-dot tone-${style.tone}">${style.html}</span><div><p class="tl-text">${esc(row.text)}</p><p class="tl-time">${esc(when(row.t))}</p></div></li>`;
           });
           const html = [...pending, ...items].join("");
           setHTML(
