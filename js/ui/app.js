@@ -10,6 +10,8 @@
 
   const byId = (id) => document.getElementById(id);
   const root = byId("view");
+  // Judul awal dipakai lagi oleh tampilan tanpa sub-halaman (POS, publik, hasil).
+  const DEFAULT_TITLE = document.title;
   const control = {
     play: byId("sim-play"),
     reset: byId("sim-reset"),
@@ -75,6 +77,7 @@
     root.classList.toggle("is-app", Boolean(views[role].shell));
     app.viewName = role;
     app.view = views[role].mount(host, app);
+    if (!views[role].shell) document.title = DEFAULT_TITLE;
     window.scrollTo(0, 0);
     for (const link of document.querySelectorAll(".role-tabs a")) {
       if (link.getAttribute("href") === `#${role}`)
