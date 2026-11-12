@@ -1,0 +1,251 @@
+/* Wireframe POS SPBU (Gambar 4) dan info publik (Gambar 5). Bingkai perangkat, vonis,
+   kartu status, dan peta memakai gaya devices.css; di sini hanya tata letak wireframe. */
+
+/* ---------- Tablet POS ---------- */
+.wfp .wfp-bar {
+  flex-wrap: nowrap;
+  min-height: 64px;
+}
+
+.wfp-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.wfp-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 16px;
+}
+
+.wfp-queue {
+  grid-column: 1 / -1;
+}
+
+.wfp .panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.wfp-col {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wfp-label {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.wfp-plate {
+  margin: 2px 0 10px;
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+}
+
+.wfp-meta {
+  color: var(--ink-2);
+  font-size: 14.5px;
+}
+
+.wfp-big {
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+/* Vonis wireframe: teks di tengah tanpa ikon; warnanya tetap dari .device-tablet .verdict. */
+.wfp .wfp-verdict {
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-height: 150px;
+  text-align: center;
+}
+
+.wfp .wfp-verdict strong {
+  font-size: 40px;
+}
+
+.wfp-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--ink-2);
+  font-size: 14.5px;
+}
+
+.wfp-facts .pill {
+  vertical-align: middle;
+}
+
+/* Tombol menempel di dasar panel seperti wireframe. */
+.wfp-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: auto;
+}
+
+.wfp-actions .wfp-wide {
+  grid-column: 1 / -1;
+}
+
+.wfp .correction[hidden] {
+  display: none;
+}
+
+.wfp-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.wfp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.wfp-card-plate {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.wfp-card-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.wfp-card-status .mk {
+  width: 11px;
+  height: 11px;
+  flex: none;
+}
+
+/* ---------- Ponsel info publik ---------- */
+.wfq .device-phone {
+  margin: 0 auto;
+}
+
+.wfq .phone-screen {
+  min-height: 0;
+}
+
+.wfq-head {
+  padding: 26px 20px 18px;
+  background: var(--b900);
+  color: #fff;
+  text-align: center;
+}
+
+.wfq-head h1 {
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.wfq-body {
+  padding-top: 16px;
+}
+
+.wfq .wfq-status {
+  margin-top: 0;
+  text-align: center;
+}
+
+.wfq .wfq-status strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 18px;
+}
+
+.wfq .wfq-status strong .shape {
+  width: 12px;
+  height: 12px;
+}
+
+.wfq .status-card.tone-crit strong .shape {
+  color: #fff;
+}
+
+.wfq-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wfq-card {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.wfq-card-name {
+  font-size: 14.5px;
+  font-weight: 800;
+}
+
+.wfq-card-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.wfq-card-status .mk {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+
+.wfq-bullets {
+  padding-left: 18px;
+  font-size: 14px;
+  list-style: disc;
+}
+
+.wfq-bullets li + li {
+  margin-top: 3px;
+}
+
+/* ---------- Layar sempit ---------- */
+@media (max-width: 860px) {
+  .wfp-body,
+  .wfp-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .wfp .wfp-bar {
+    flex-wrap: wrap;
+  }
+  .wfp-title {
+    font-size: 16px;
+  }
+  .wfp-title .wf-sep {
+    display: none;
+  }
+  .wfp-plate {
+    font-size: 34px;
+  }
+}

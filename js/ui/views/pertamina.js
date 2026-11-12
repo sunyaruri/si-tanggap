@@ -128,6 +128,32 @@
       .join("");
   }
 
+  /** Kata stok terminal dari ketahanan (hari), memakai ambang config.terminalDays. */
+  function stockWord(days) {
+    const th = config.terminalDays;
+    if (days < th.low) return "rendah";
+    return days < th.high ? "sedang" : "tinggi";
+  }
+
+  /** Tabel ringkas stok terminal: Terminal / Stok / Hari cukup / Jalur / Status. */
+  function terminalTableHTML(sim) {
+    const disrupted = engine.isDisrupted(sim);
+    const rows = sim.terminals
+      .map((terminal, index) => {
+        const status = terminalStatus(terminal.days);
+        const blocked = config.terminals[index].primary && disrupted;
+        return `<tr>
+          <td class="is-strong">${esc(terminal.name)}</td>
+          <td>${stockWord(terminal.days)}</td>
+          <td class="num">${num(terminal.days, 1)} hari</td>
+          <td>${blocked ? `<span class="pill tone-crit">${shape("square")}Gumitir terganggu</span>` : "normal"}</td>
+          <td>${pill(status, { label: TERMINAL_WORD[status] })}</td>
+        </tr>`;
+      })
+      .join("");
+    return `<table class="table"><thead><tr><th>Terminal</th><th>Stok</th><th class="num">Hari cukup</th><th>Jalur</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
   function drawTerminalProjection(el, sim, height) {
     const series = sim.terminals.map((terminal, index) => {
       const outKLday = config.terminals[index].outKLday;
@@ -305,6 +331,197 @@
   const statusMark = (status) =>
     `<span class="st st-${STATUS[status].tone}">${shape(STATUS[status].shape)}</span>`;
 
+  // ---------- Bagian bersama (dipakai halaman ini dan versi wireframe) ----------
+
+  /** KPI wilayah dan permintaan; `r` dari refs() atas markup kpi() ber-ref krisis/waspada/trucks/request. */
+  function updateRegionKpis(r, sim) {
+    // Prototipe memantau satu wilayah (Kab. Jember); platform nyata menjumlahkan semua kabupaten.
+    const status = sim.region.status;
+    setText(r.krisis, status === "KRISIS" ? "1" : "0");
+    r.krisisCard.dataset.tone = status === "KRISIS" ? "crit" : "";
+    setText(r.waspada, status === "WASPADA" ? "1" : "0");
+    r.waspadaCard.dataset.tone = status === "WASPADA" ? "warn" : "";
+    setText(r.trucks, num(sim.trucks.length));
+
+    const waiting = waitingDiversion(sim);
+    setText(r.request, waiting ? "1" : "0");
+    setText(
+      r.requestSub,
+      waiting
+        ? "menunggu persetujuan"
+        : sim.diversion
+          ? "sudah disetujui"
+          : "tidak ada yang menunggu",
+    );
+    r.requestCard.dataset.tone = waiting ? "warn" : "";
+  }
+
+  /** Peta regional: jalur, truk, kapal tanker, terminal, dan penanda status Kab. Jember. */
+  function regionMap(el) {
+    const map = maps.create(el, { center: [-7.85, 113.5], zoom: 8 });
+    const layers = [];
+    let regionMarker = null;
+    if (map) {
+      layers.push(
+        maps.routeLayer(map, config),
+        maps.truckLayer(map),
+        maps.tankerLayer(map, config),
+      );
+      maps.terminalLayer(map, config);
+      regionMarker = L.marker(config.hub, {
+        icon: maps.divIcon("", "", 26),
+        keyboard: false,
+        zIndexOffset: 900,
+      })
+        .bindTooltip("Kab. Jember", {
+          permanent: true,
+          direction: "bottom",
+          offset: [0, 12],
+          className: "tip-label",
+        })
+        .addTo(map);
+    }
+    return {
+      update(sim) {
+        const status = sim.region.status;
+        if (regionMarker && regionMarker.__status !== status) {
+          regionMarker.__status = status;
+          regionMarker.setIcon(
+            maps.divIcon(
+              `mk-${STATUS[status].tone}`,
+              shape(STATUS[status].shape),
+              26,
+            ),
+          );
+        }
+        for (const layer of layers) layer(sim);
+      },
+      destroy() {
+        if (map) map.remove();
+      },
+    };
+  }
+
+  /**
+   * Tombol [data-action="approve-diversion"] di dalam `el`: setujui pengalihan dengan jendela Batalkan.
+   * @returns {() => boolean} apakah persetujuan sedang menunggu jendela Batalkan
+   */
+  function bindDiversionApproval(el, app) {
+    let approving = false;
+    el.addEventListener("click", (event) => {
+      if (
+        event.target.closest("[data-action]")?.dataset.action !==
+        "approve-diversion"
+      )
+        return;
+      if (approving) return;
+      approving = true;
+      app.render();
+      ui.undoable({
+        text: "Pengalihan disetujui, perintah kirim ke terminal",
+        seconds: 8,
+        onCommit() {
+          approving = false;
+          if (engine.approveDiversion(app.sim))
+            toast(
+              "Pengalihan disetujui. Perintah kirim diteruskan ke terminal.",
+            );
+          app.render();
+        },
+        onUndo() {
+          approving = false;
+          app.render();
+        },
+      });
+    });
+    return () => approving;
+  }
+
+  /**
+   * Form kuota krisis: isi dari simulasi, validasi, lalu terapkan setelah jendela Batalkan.
+   * Kunci kuota tanpa input di form (mis. niaga di wireframe) memakai nilai yang berlaku.
+   */
+  function bindQuotaForm(form, app, errorEl) {
+    const keys = Object.keys(config.quota);
+    const fields = form.elements;
+    const fill = () => {
+      for (const key of keys)
+        if (fields[key]) fields[key].value = app.sim.crisisMode.quota[key];
+    };
+    fill();
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const quota = {};
+      for (const key of keys)
+        quota[key] = fields[key]
+          ? Number(fields[key].value)
+          : app.sim.crisisMode.quota[key];
+      // Validasi saja di sini; kuota baru diterapkan setelah jendela Batalkan habis.
+      const valid = Object.values(quota).every(
+        (liters) => Number.isInteger(liters) && liters >= 1 && liters <= 200,
+      );
+      if (!valid) {
+        errorEl.textContent = "Isi tiap kuota dengan angka bulat 1–200.";
+        return;
+      }
+      errorEl.textContent = "";
+      ui.undoable({
+        text: `Kuota ${quota.motor}/${quota.mobil}/${quota.niaga} L diterapkan ke semua POS`,
+        seconds: 6,
+        onCommit() {
+          engine.setCrisisQuota(app.sim, quota);
+          toast("Kuota krisis diterapkan ke semua POS wilayah.");
+          app.render();
+        },
+        onUndo: fill,
+      });
+    });
+  }
+
+  /**
+   * Tombol [data-action="forward"] di dalam `el`: teruskan temuan ke tim audit / Satgas dengan jendela Batalkan.
+   * @returns {{ forwarding: () => boolean, note: () => string }}
+   */
+  function bindForward(el, app, button) {
+    let forwarding = false;
+    let forwardedAt = null;
+    el.addEventListener("click", (event) => {
+      if (event.target.closest("[data-action]")?.dataset.action !== "forward")
+        return;
+      if (forwarding) return;
+      forwarding = true;
+      button.disabled = true;
+      ui.undoable({
+        text: "Temuan diteruskan ke tim audit / Satgas",
+        seconds: 6,
+        onCommit() {
+          forwarding = false;
+          engine.logEvent(
+            app.sim,
+            "report",
+            "Temuan diteruskan ke tim audit / Satgas",
+          );
+          forwardedAt = app.sim.t;
+          toast("Temuan diteruskan ke tim audit dan Satgas.");
+          app.render();
+        },
+        onUndo() {
+          forwarding = false;
+          button.disabled = false;
+        },
+      });
+    });
+    return {
+      forwarding: () => forwarding,
+      note: () =>
+        forwarding
+          ? "Mengirim… bisa dibatalkan di bilah bawah."
+          : forwardedAt !== null
+            ? `Terakhir diteruskan ${when(forwardedAt)}.`
+            : "Tim audit dan Satgas BBM menerima salinannya.",
+    };
+  }
+
   // ---------- Halaman ----------
 
   function ringkasanPage(el) {
@@ -378,25 +595,7 @@
         r.banner.hidden = banner === "";
         setHTML(r.banner, banner);
 
-        // Prototipe memantau satu wilayah (Kab. Jember); platform nyata menjumlahkan semua kabupaten.
-        const status = sim.region.status;
-        setText(r.krisis, status === "KRISIS" ? "1" : "0");
-        r.krisisCard.dataset.tone = status === "KRISIS" ? "crit" : "";
-        setText(r.waspada, status === "WASPADA" ? "1" : "0");
-        r.waspadaCard.dataset.tone = status === "WASPADA" ? "warn" : "";
-        setText(r.trucks, num(sim.trucks.length));
-
-        const waiting = waitingDiversion(sim);
-        setText(r.request, waiting ? "1" : "0");
-        setText(
-          r.requestSub,
-          waiting
-            ? "menunggu persetujuan"
-            : sim.diversion
-              ? "sudah disetujui"
-              : "tidak ada yang menunggu",
-        );
-        r.requestCard.dataset.tone = waiting ? "warn" : "";
+        updateRegionKpis(r, sim);
 
         // SLA milik Pertamina: waktu dari permintaan pengalihan Pemda sampai disetujui (target bersama < 24 jam).
         const diversion = sim.diversion;
@@ -412,7 +611,12 @@
         } else {
           const took = diversion.approvedAt - diversion.requestedAt;
           setText(r.sla, span(took));
-          setText(r.slaSub, took <= target ? `tepat SLA, target < ${num(target)} jam` : `melewati target ${num(target)} jam`);
+          setText(
+            r.slaSub,
+            took <= target
+              ? `tepat SLA, target < ${num(target)} jam`
+              : `melewati target ${num(target)} jam`,
+          );
           r.slaCard.dataset.tone = took <= target ? "" : "crit";
         }
 
@@ -458,29 +662,7 @@
       </div>`;
     const r = refs(el);
 
-    const map = maps.create(r.map, { center: [-7.85, 113.5], zoom: 8 });
-    const layers = [];
-    let regionMarker = null;
-    if (map) {
-      layers.push(
-        maps.routeLayer(map, config),
-        maps.truckLayer(map),
-        maps.tankerLayer(map, config),
-      );
-      maps.terminalLayer(map, config);
-      regionMarker = L.marker(config.hub, {
-        icon: maps.divIcon("", "", 26),
-        keyboard: false,
-        zIndexOffset: 900,
-      })
-        .bindTooltip("Kab. Jember", {
-          permanent: true,
-          direction: "bottom",
-          offset: [0, 12],
-          className: "tip-label",
-        })
-        .addTo(map);
-    }
+    const map = regionMap(r.map);
 
     function terminalRows(sim) {
       return sim.terminals
@@ -518,21 +700,9 @@
         );
         setHTML(r.terminals, terminalRows(sim));
         setHTML(r.trucks, truckRows(sim));
-        if (regionMarker && regionMarker.__status !== status) {
-          regionMarker.__status = status;
-          regionMarker.setIcon(
-            maps.divIcon(
-              `mk-${STATUS[status].tone}`,
-              shape(STATUS[status].shape),
-              26,
-            ),
-          );
-        }
-        for (const layer of layers) layer(sim);
+        map.update(sim);
       },
-      destroy() {
-        if (map) map.remove();
-      },
+      destroy: map.destroy,
     };
   }
 
@@ -646,7 +816,9 @@
 
   /** Stok terminal donor sekarang → sesudah pengalihan, dalam hari ketahanan. */
   function donorChip(sim, item) {
-    const index = config.terminals.findIndex((terminal) => terminal.id === item.terminalId);
+    const index = config.terminals.findIndex(
+      (terminal) => terminal.id === item.terminalId,
+    );
     const terminal = sim.terminals[index];
     const base = config.terminals[index];
     if (!terminal || !base) return "";
@@ -658,10 +830,17 @@
   function raceHTML(sim, diversion) {
     const fastest = Math.min(...diversion.plan.map((item) => item.leadHours));
     const outlook = engine.stockOutlook(sim);
-    const arrive = diversion.approvedAt === null ? sim.t + fastest : diversion.approvedAt + fastest;
+    const arrive =
+      diversion.approvedAt === null
+        ? sim.t + fastest
+        : diversion.approvedAt + fastest;
     const empty = outlook.emptyIn === null ? null : sim.t + outlook.emptyIn;
     const lines = [`Truk pengalihan pertama tiba ≈ ${when(arrive)}`];
-    lines.push(empty === null ? "Stok SPBU Jember tidak habis dalam 48 jam" : `Stok SPBU Jember habis ≈ ${when(empty)}`);
+    lines.push(
+      empty === null
+        ? "Stok SPBU Jember tidak habis dalam 48 jam"
+        : `Stok SPBU Jember habis ≈ ${when(empty)}`,
+    );
     return `<div class="basis"><span class="basis-title">Bila disetujui sekarang</span>${lines.map((text) => `<span class="chip">${esc(text)}</span>`).join("")}</div>`;
   }
 
@@ -684,32 +863,7 @@
         })}
       </div>`;
     const r = refs(el);
-    let approving = false;
-
-    el.addEventListener("click", (event) => {
-      if (
-        event.target.closest("[data-action]")?.dataset.action !==
-        "approve-diversion"
-      )
-        return;
-      if (approving) return;
-      approving = true;
-      app.render();
-      ui.undoable({
-        text: "Pengalihan disetujui, perintah kirim ke terminal",
-        seconds: 8,
-        onCommit() {
-          approving = false;
-          if (engine.approveDiversion(app.sim))
-            toast("Pengalihan disetujui. Perintah kirim diteruskan ke terminal.");
-          app.render();
-        },
-        onUndo() {
-          approving = false;
-          app.render();
-        },
-      });
-    });
+    const approving = bindDiversionApproval(el, app);
 
     function view(sim) {
       const diversion = sim.diversion;
@@ -741,7 +895,7 @@
       const body = `<div class="plan-need"><b>Jember butuh tambahan ${num(diversion.deficitKLday)} KL per hari</b><span class="note">Perlu ${num(diversion.trucks)} truk tangki tambahan.</span></div>${raceHTML(sim, diversion)}${cards}`;
       const foot =
         diversion.approvedAt === null
-          ? `<button type="button" class="btn btn-primary" data-action="approve-diversion"${approving ? " disabled" : ""}>${icon("check", 17)}Setujui pengalihan</button><span class="note">${approving ? "Dikirim dalam beberapa detik. Bisa dibatalkan di bilah bawah." : `Diminta Pemda ${esc(when(diversion.requestedAt))} · menunggu ${esc(span(sim.t - diversion.requestedAt))}`}</span>`
+          ? `<button type="button" class="btn btn-primary" data-action="approve-diversion"${approving() ? " disabled" : ""}>${icon("check", 17)}Setujui pengalihan</button><span class="note">${approving() ? "Dikirim dalam beberapa detik. Bisa dibatalkan di bilah bawah." : `Diminta Pemda ${esc(when(diversion.requestedAt))} · menunggu ${esc(span(sim.t - diversion.requestedAt))}`}</span>`
           : `<span class="pill tone-ok">${shape("circle")}Disetujui ${esc(when(diversion.approvedAt))}</span><span class="note">Diminta ${esc(when(diversion.requestedAt))}, disetujui ${esc(span(diversion.approvedAt - diversion.requestedAt))} kemudian. Perintah kirim sudah diteruskan.</span>`;
       return { body, foot };
     }
@@ -786,38 +940,7 @@
         })}
       </div>`;
     const r = refs(el);
-    const fields = r.params.elements;
-    for (const key of Object.keys(config.quota))
-      fields[key].value = app.sim.crisisMode.quota[key];
-
-    r.params.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const quota = {};
-      for (const key of Object.keys(config.quota))
-        quota[key] = Number(fields[key].value);
-      // Validasi saja di sini; kuota baru diterapkan setelah jendela Batalkan habis.
-      const valid = Object.values(quota).every(
-        (liters) => Number.isInteger(liters) && liters >= 1 && liters <= 200,
-      );
-      if (!valid) {
-        r.paramsError.textContent = "Isi tiap kuota dengan angka bulat 1–200.";
-        return;
-      }
-      r.paramsError.textContent = "";
-      ui.undoable({
-        text: `Kuota ${quota.motor}/${quota.mobil}/${quota.niaga} L diterapkan ke semua POS`,
-        seconds: 6,
-        onCommit() {
-          engine.setCrisisQuota(app.sim, quota);
-          toast("Kuota krisis diterapkan ke semua POS wilayah.");
-          app.render();
-        },
-        onUndo() {
-          for (const key of Object.keys(config.quota))
-            fields[key].value = app.sim.crisisMode.quota[key];
-        },
-      });
-    });
+    bindQuotaForm(r.params, app, r.paramsError);
 
     return {
       update(sim) {
@@ -838,31 +961,7 @@
         ${panel({ iconName: "list", title: "Jenis pesan", body: '<div class="risk-list" data-ref="kinds"></div>' })}
       </div>`;
     const r = refs(el);
-    let forwarding = false;
-    let forwardedAt = null;
-
-    el.addEventListener("click", (event) => {
-      if (event.target.closest("[data-action]")?.dataset.action !== "forward")
-        return;
-      if (forwarding) return;
-      forwarding = true;
-      r.forward.disabled = true;
-      ui.undoable({
-        text: "Temuan diteruskan ke tim audit / Satgas",
-        seconds: 6,
-        onCommit() {
-          forwarding = false;
-          engine.logEvent(app.sim, "report", "Temuan diteruskan ke tim audit / Satgas");
-          forwardedAt = app.sim.t;
-          toast("Temuan diteruskan ke tim audit dan Satgas.");
-          app.render();
-        },
-        onUndo() {
-          forwarding = false;
-          r.forward.disabled = false;
-        },
-      });
-    });
+    const forward = bindForward(el, app, r.forward);
 
     const KINDS = [
       {
@@ -889,15 +988,8 @@
       update(sim) {
         const items = inboxItems(sim);
         setHTML(r.inbox, inboxHTML(items));
-        r.forward.disabled = items.length === 0 || forwarding;
-        setText(
-          r.forwardNote,
-          forwarding
-            ? "Mengirim… bisa dibatalkan di bilah bawah."
-            : forwardedAt !== null
-              ? `Terakhir diteruskan ${when(forwardedAt)}.`
-              : "Tim audit dan Satgas BBM menerima salinannya.",
-        );
+        r.forward.disabled = items.length === 0 || forward.forwarding();
+        setText(r.forwardNote, forward.note());
         setHTML(
           r.kinds,
           KINDS.map(
@@ -955,5 +1047,21 @@
   }
 
   ns.views = ns.views || {};
-  ns.views.pertamina = { mount, shell: true };
+  ns.views.pertamina = {
+    mount,
+    shell: true,
+    parts: {
+      panel,
+      terminalStatus,
+      waitingDiversion,
+      inboxItems,
+      updateRegionKpis,
+      regionMap,
+      terminalTableHTML,
+      drawTerminalProjection,
+      bindDiversionApproval,
+      bindQuotaForm,
+      bindForward,
+    },
+  };
 })((globalThis.SiTanggap = globalThis.SiTanggap || {}));

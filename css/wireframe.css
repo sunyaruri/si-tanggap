@@ -1,0 +1,116 @@
+/* Versi wireframe (satu layar per peran). Bagian khusus peran ada di wf-*.css. */
+
+.wf {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - var(--demo-h));
+}
+
+.wf-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 13px;
+}
+
+.wf-switch-label {
+  margin-right: 8px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.wf-switch a {
+  padding: 5px 12px;
+  border-radius: 99px;
+  color: var(--ink-2);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.wf-switch a:hover {
+  background: var(--brand-soft);
+}
+
+.wf-switch a[aria-current="page"] {
+  background: var(--brand);
+  color: #fff;
+}
+
+body.is-shot .wf-switch {
+  display: none;
+}
+
+.wf-page {
+  flex: 1;
+  padding: 16px 20px 140px;
+}
+
+body.is-shot .wf-page {
+  padding-bottom: 20px;
+}
+
+/* Bilah judul seperti wireframe: SI-TANGGAP | judul layar, alat di kanan. */
+.wf-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  min-height: 60px;
+  margin-bottom: 16px;
+  padding: 10px 18px;
+  border-radius: var(--radius);
+  background:
+    var(--brand-band) top / 100% 4px no-repeat,
+    var(--b900);
+  color: #fff;
+}
+
+.wf-logo {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--red);
+}
+
+.wf-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.wf-title b {
+  font-weight: 800;
+}
+
+.wf-sep {
+  color: #6f89a6;
+  font-weight: 400;
+}
+
+.wf-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+@media (max-width: 860px) {
+  .wf-page {
+    padding: 12px 16px 220px;
+  }
+  .wf-title {
+    font-size: 16px;
+  }
+}

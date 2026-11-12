@@ -3005,11 +3005,14 @@ dialog textarea {
   white-space: nowrap;
 }
 
-/* Layar sempit: tombol mode tangkapan layar cukup ikon, dock dibuat ringkas */
-@media (max-width: 860px) {
+/* Layar sempit: tombol mode tangkapan layar cukup ikon (6 tab peran tidak muat bersama teksnya), dock dibuat ringkas */
+@media (max-width: 1180px) {
   .nav-btn-text {
     display: none;
   }
+}
+
+@media (max-width: 860px) {
   .demo-nav {
     gap: 10px 12px;
   }

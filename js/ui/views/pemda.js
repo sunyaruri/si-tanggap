@@ -171,11 +171,46 @@
     };
   }
 
-  const mapLegend = () =>
-    maps.legend([
-      ui.stockLegend(),
-      ui.legendItem(ui.truckMark(), "Truk tangki"),
-    ]);
+  const legendItems = () => [
+    ui.stockLegend(),
+    ui.legendItem(ui.truckMark(), "Truk tangki"),
+  ];
+  const mapLegend = () => maps.legend(legendItems());
+
+  const emptyHTML = (title, text) =>
+    `<div class="empty"><span class="empty-icon">${icon("shield", 20)}</span><strong>${esc(title)}</strong><span class="note">${esc(text)}</span></div>`;
+
+  // Saringan peta: kecamatan dari data SPBU; jenis BBM hanya penanda karena simulasi agregat.
+  const FILTER_FIELDS = `<label class="field-inline">Kecamatan <select class="select" data-ref="kec"></select></label>
+    <label class="field-inline" title="Simulasi menggabungkan semua jenis BBM; data per jenis tersedia dari POS di sistem nyata.">Jenis BBM <select class="select" disabled><option>Semua jenis (data agregat)</option></select></label>`;
+
+  const kecFilter = (state) => (s) =>
+    state.kec === "semua" || s.kecamatan === state.kec;
+
+  /** Isi pilihan kecamatan; saat berganti, peta diarahkan ke SPBU kecamatan itu. */
+  function bindKecamatan(select, map, state, app) {
+    const kecamatan = [...new Set(app.sim.spbu.map((s) => s.kecamatan))].sort(
+      (a, b) => a.localeCompare(b, "id"),
+    );
+    select.innerHTML = ["semua", ...kecamatan]
+      .map(
+        (name) =>
+          `<option value="${esc(name)}">${name === "semua" ? "Semua kecamatan" : esc(name)}</option>`,
+      )
+      .join("");
+    select.value = state.kec;
+    select.addEventListener("change", () => {
+      state.kec = select.value;
+      state.page = 1;
+      const spots = app.sim.spbu
+        .filter(kecFilter(state))
+        .map((s) => [s.lat, s.lng]);
+      if (map.map && state.kec !== "semua" && spots.length)
+        map.map.fitBounds(spots, { maxZoom: 13, padding: [60, 60] });
+      else if (map.map) map.map.setView(MAP_VIEW.center, MAP_VIEW.zoom);
+      app.render();
+    });
+  }
 
   /** Tombol saring dan halaman memakai satu pendengar per halaman. */
   function onControls(el, state, app) {
@@ -200,7 +235,9 @@
 
   const pct = (ratio) => {
     const value = Math.round((ratio - 1) * 100);
-    return value === 0 ? "0%" : `${value > 0 ? "+" : "−"}${num(Math.abs(value))}%`;
+    return value === 0
+      ? "0%"
+      : `${value > 0 ? "+" : "−"}${num(Math.abs(value))}%`;
   };
 
   /** Permintaan termasuk yang ditahan kuota; penjualan turun saat stok habis, jadi hanya jadi keterangan. */
@@ -209,7 +246,39 @@
     setText(r.consumption, pct(demand));
     r.consumptionCard.dataset.tone =
       demand > sim.cfg.ews.consumptionWaspada ? "warn" : "";
-    setText(r.consumptionSub, `penjualan 24 jam ${pct(sim.region.consumptionRatio)}`);
+    setText(
+      r.consumptionSub,
+      `penjualan 24 jam ${pct(sim.region.consumptionRatio)}`,
+    );
+  }
+
+  function criticalTone(sim) {
+    const region = sim.region;
+    if (
+      region.emptyCount > 0 ||
+      region.criticalShare >= sim.cfg.ews.criticalShareKrisis
+    )
+      return "crit";
+    return region.criticalCount > 0 ? "warn" : "";
+  }
+
+  const ratioValue = (r) =>
+    r > R_DISPLAY_CAP ? `> ${R_DISPLAY_CAP}` : num(r, 2);
+
+  function ratioKpi(r, sim) {
+    const region = sim.region;
+    const th = sim.cfg.ews;
+    setText(r.ratio, ratioValue(region.r));
+    r.ratioCard.dataset.tone =
+      region.r < th.rKrisis ? "crit" : region.r < th.rNormal ? "warn" : "";
+    setText(
+      r.ratioSub,
+      region.r < th.rKrisis
+        ? "di bawah 1: stok habis lebih dulu"
+        : region.r < th.rNormal
+          ? "di bawah 1,5: mulai menipis"
+          : "di atas 1,5: aman",
+    );
   }
 
   /** Waktu antre bergantung jam; yang dirasakan warga adalah puncaknya dalam 24 jam. */
@@ -338,33 +407,8 @@
             `${num(region.criticalCount)}<small>dari ${num(sim.spbu.length)}</small>`,
           );
           setHTML(r.criticalSub, trendText(sim));
-          r.criticalCard.dataset.tone =
-            region.emptyCount > 0 ||
-            region.criticalShare >= sim.cfg.ews.criticalShareKrisis
-              ? "crit"
-              : region.criticalCount > 0
-                ? "warn"
-                : "";
-
-          setText(
-            r.ratio,
-            region.r > R_DISPLAY_CAP ? `> ${R_DISPLAY_CAP}` : num(region.r, 2),
-          );
-          const th = sim.cfg.ews;
-          r.ratioCard.dataset.tone =
-            region.r < th.rKrisis
-              ? "crit"
-              : region.r < th.rNormal
-                ? "warn"
-                : "";
-          setText(
-            r.ratioSub,
-            region.r < th.rKrisis
-              ? "di bawah 1: stok habis lebih dulu"
-              : region.r < th.rNormal
-                ? "di bawah 1,5: mulai menipis"
-                : "di atas 1,5: aman",
-          );
+          r.criticalCard.dataset.tone = criticalTone(sim);
+          ratioKpi(r, sim);
 
           setText(r.queue, ui.wait(peakQueue(sim)));
           demandKpi(r, sim);
@@ -404,10 +448,7 @@
             <article class="panel">
               <header class="panel-head"><h2>${icon("map", 18)}Stok SPBU dan posisi truk tangki</h2><div class="panel-tools" data-ref="counts"></div></header>
               <div class="panel-body">
-                <div class="toolbar">
-                  <label class="field-inline">Kecamatan <select class="select" data-ref="kec"></select></label>
-                  <label class="field-inline" title="Simulasi menggabungkan semua jenis BBM; data per jenis tersedia dari POS di sistem nyata.">Jenis BBM <select class="select" disabled><option>Semua jenis (data agregat)</option></select></label>
-                </div>
+                <div class="toolbar">${FILTER_FIELDS}</div>
                 <div class="map-wrap"><div class="map map-xl" data-ref="map"></div>${mapLegend()}</div>
               </div>
             </article>
@@ -421,27 +462,9 @@
             </article>
           </div>`;
         const r = refs(el);
-        const inKec = (s) => state.kec === "semua" || s.kecamatan === state.kec;
+        const inKec = kecFilter(state);
         const map = mountMap(r.map, {}, inKec);
-        const kecamatan = [
-          ...new Set(ctx.app.sim.spbu.map((s) => s.kecamatan)),
-        ].sort((a, b) => a.localeCompare(b, "id"));
-        r.kec.innerHTML = ["semua", ...kecamatan]
-          .map(
-            (name) =>
-              `<option value="${esc(name)}">${name === "semua" ? "Semua kecamatan" : esc(name)}</option>`,
-          )
-          .join("");
-        r.kec.value = state.kec;
-        r.kec.addEventListener("change", () => {
-          state.kec = r.kec.value;
-          state.page = 1;
-          const spots = ctx.app.sim.spbu.filter(inKec).map((s) => [s.lat, s.lng]);
-          if (map.map && state.kec !== "semua" && spots.length)
-            map.map.fitBounds(spots, { maxZoom: 13, padding: [60, 60] });
-          else if (map.map) map.map.setView(MAP_VIEW.center, MAP_VIEW.zoom);
-          ctx.app.render();
-        });
+        bindKecamatan(r.kec, map, state, ctx.app);
         onControls(el, state, ctx.app);
         // Klik baris: arahkan peta ke SPBU itu.
         r.list.addEventListener("click", (event) => {
@@ -489,20 +512,42 @@
   function projectionMarks(outlook, divertedEtas, sim) {
     const marks = [];
     if (outlook.criticalIn)
-      marks.push({ x: outlook.criticalIn, label: `kritis ≈ ${when(sim.t + outlook.criticalIn)}` });
+      marks.push({
+        x: outlook.criticalIn,
+        label: `kritis ≈ ${when(sim.t + outlook.criticalIn)}`,
+      });
     if (outlook.emptyIn !== null)
-      marks.push({ x: outlook.emptyIn, label: `habis ≈ ${when(sim.t + outlook.emptyIn)}` });
+      marks.push({
+        x: outlook.emptyIn,
+        label: `habis ≈ ${when(sim.t + outlook.emptyIn)}`,
+      });
     if (divertedEtas.length)
-      marks.push({ x: Math.min(...divertedEtas), label: "truk pengalihan tiba" });
+      marks.push({
+        x: Math.min(...divertedEtas),
+        label: "truk pengalihan tiba",
+      });
     return marks;
   }
 
-  function drawProjection(el, sim) {
+  /**
+   * Grafik proyeksi stok 48 jam.
+   * @param {{ height?: number, compact?: boolean }} [opts] compact = grafik kecil: hanya "habis" dan "ETA truk"
+   */
+  function drawProjection(el, sim, { height = 380, compact = false } = {}) {
     const outlook = engine.stockOutlook(sim, PROJECTION_HOURS);
     const points = outlook.points.map((point) => [point.h, point.stockKL]);
     const divertedEtas = sim.trucks
       .filter((truck) => truck.route === "malang" || truck.route === "surabaya")
       .map((truck) => truck.etaAt - sim.t);
+    let marks = projectionMarks(outlook, divertedEtas, sim);
+    if (compact) {
+      // Grafik sempit: label berdempet, jadi cukup kapan habis dan kapan truk (pengalihan bila ada) tiba.
+      const etas = divertedEtas.length
+        ? divertedEtas
+        : sim.trucks.map((truck) => truck.etaAt - sim.t).filter((h) => h > 0);
+      marks = marks.filter((mark) => mark.label.startsWith("habis"));
+      if (etas.length) marks.push({ x: Math.min(...etas), label: "ETA truk" });
+    }
     charts.line(el, {
       series: [{ name: "Stok wilayah", color: ui.seriesColor(0), points }],
       xTicks: [0, 12, 24, 36, 48].map((h) => ({
@@ -513,9 +558,9 @@
       xFormat: (h) => `+${h} jam`,
       yFormat: (value) => `${num(value)} KL`,
       levels: [{ y: outlook.critical, label: "batas kritis (6 jam konsumsi)" }],
-      marks: projectionMarks(outlook, divertedEtas, sim),
+      marks,
       area: true,
-      height: 380,
+      height,
       ariaLabel: "Proyeksi stok BBM wilayah 48 jam ke depan",
     });
   }
@@ -612,34 +657,47 @@
       `${num(region.criticalCount)} dari ${num(sim.spbu.length)} SPBU stok < 6 jam`,
     ];
     if (engine.isDisrupted(sim)) {
-      const late = sim.cfg.supply.leadDisruptedHours - sim.cfg.supply.leadNormalHours;
+      const late =
+        sim.cfg.supply.leadDisruptedHours - sim.cfg.supply.leadNormalHours;
       facts.push(`truk telat ±${num(late)} jam (jalur Gumitir)`);
     }
-    if (outlook.emptyIn !== null) facts.push(`stok wilayah habis ≈ ${when(sim.t + outlook.emptyIn)}`);
-    else if (outlook.criticalIn) facts.push(`stok kritis ≈ ${when(sim.t + outlook.criticalIn)}`);
+    if (outlook.emptyIn !== null)
+      facts.push(`stok wilayah habis ≈ ${when(sim.t + outlook.emptyIn)}`);
+    else if (outlook.criticalIn)
+      facts.push(`stok kritis ≈ ${when(sim.t + outlook.criticalIn)}`);
     return `<div class="basis"><span class="basis-title">Dasar rekomendasi</span>${facts.map((text) => `<span class="chip">${esc(text)}</span>`).join("")}</div>`;
   }
 
   /** Catatan di kaki panel rekomendasi: apa yang terjadi bila disetujui sekarang. */
   function pendingNote(state, deferred) {
-    if (state.approving) return "Terbit dalam beberapa detik. Bisa dibatalkan di bilah bawah.";
+    if (state.approving)
+      return "Terbit dalam beberapa detik. Bisa dibatalkan di bilah bawah.";
     if (state.editing) return "Hapus centang butir yang tidak akan dijalankan.";
-    if (deferred) return `Ditunda ${when(deferred.t)}. Batas waktu tetap berjalan.`;
+    if (deferred)
+      return `Ditunda ${when(deferred.t)}. Batas waktu tetap berjalan.`;
     if (state.unchecked.size)
       return `${num(state.unchecked.size)} butir tidak akan dijalankan.`;
     return "Semua butir akan dijalankan.";
   }
 
-  /** Tombol sesuai dokumen alur 4.2: Setujui, Ubah, dan Tunda. */
-  function recommendationsView(sim, state) {
+  // Versi ringkas menyembunyikan butir otomatis: tetap dijalankan mesin, tidak perlu diputuskan.
+  const recItems = (status, sim, compact) =>
+    ews
+      .recommendations(status, sim.cfg)
+      .filter((item) => !compact || !item.auto);
+
+  /**
+   * Tombol sesuai dokumen alur 4.2: Setujui, Ubah, dan Tunda.
+   * @param {{ compact?: boolean }} [opts] compact = tanpa dasar rekomendasi dan butir otomatis
+   */
+  function recommendationsView(sim, state, { compact = false } = {}) {
     const pending = engine.pendingPolicyStatus(sim);
     if (pending) {
       const deferred =
         state.deferred && state.deferred.status === pending
           ? state.deferred
           : null;
-      const items = ews
-        .recommendations(pending, sim.cfg)
+      const items = recItems(pending, sim, compact)
         .map((item) =>
           recItemHTML(item, {
             checked: item.auto || !state.unchecked.has(item.id),
@@ -659,7 +717,7 @@
         : `<button type="button" class="btn" data-action="defer">${icon("pause2", 16)}Tunda</button>`;
       return {
         state: `${pill(pending)}${chip}`,
-        body: `${basisHTML(sim)}<ul class="rec-list">${items}</ul>`,
+        body: `${compact ? "" : basisHTML(sim)}<ul class="rec-list">${items}</ul>`,
         foot: `<button type="button" class="btn btn-primary" data-action="approve"${state.approving ? " disabled" : ""}>${icon("check", 17)}${action}</button>${edit}${defer}<span class="note">${esc(pendingNote(state, deferred))}</span>`,
       };
     }
@@ -672,13 +730,15 @@
     if (!status) {
       return {
         state: '<span class="chip">tidak ada tindakan</span>',
-        body: `<div class="empty"><span class="empty-icon">${icon("shield", 20)}</span><strong>Tidak ada rekomendasi saat ini</strong><span class="note">Rekomendasi muncul otomatis saat status naik ke WASPADA atau KRISIS.</span></div>`,
+        body: emptyHTML(
+          "Tidak ada rekomendasi saat ini",
+          "Rekomendasi muncul otomatis saat status naik ke WASPADA atau KRISIS.",
+        ),
         foot: '<a class="btn" href="#pemda/peta">Lihat peta SPBU</a>',
       };
     }
     const policy = sim.policy[status];
-    const items = ews
-      .recommendations(status, sim.cfg)
+    const items = recItems(status, sim, compact)
       .map((item) =>
         recItemHTML(item, {
           state: policy.items.includes(item.id) ? "done" : "skipped",
@@ -690,6 +750,61 @@
       body: `<ul class="rec-list">${items}</ul>`,
       foot: `<span class="note">Disetujui ${esc(when(policy.at))} dan tercatat untuk audit SLA.</span>`,
     };
+  }
+
+  /** Centang, Ubah, Tunda, dan Setujui (dengan jendela batal) untuk rekomendasi yang menunggu. */
+  function bindRecActions(el, state, app) {
+    el.addEventListener("change", (event) => {
+      const id = event.target.dataset.item;
+      if (!id) return;
+      if (event.target.checked) state.unchecked.delete(id);
+      else state.unchecked.add(id);
+    });
+    el.addEventListener("click", (event) => {
+      const action = event.target.closest("[data-action]")?.dataset.action;
+      const pending = engine.pendingPolicyStatus(app.sim);
+      if (!pending) return;
+      if (action === "edit") {
+        state.editing = !state.editing;
+      } else if (action === "defer") {
+        engine.logEvent(
+          app.sim,
+          "defer",
+          `Rekomendasi ${pending} ditunda oleh Pemda`,
+        );
+        state.deferred = { status: pending, t: app.sim.t };
+        state.editing = false;
+        toast("Rekomendasi ditunda. Batas waktu SLA tetap berjalan.");
+      } else if (action === "approve") {
+        if (state.approving) return;
+        const ids = ews
+          .recommendations(pending, app.sim.cfg)
+          .map((item) => item.id)
+          .filter((id) => !state.unchecked.has(id));
+        state.approving = true;
+        state.editing = false;
+        ui.undoable({
+          text:
+            pending === "KRISIS"
+              ? `SE KRISIS terbit, ${ids.length} butir dijalankan`
+              : `${ids.length} butir rekomendasi disetujui`,
+          seconds: 8,
+          onCommit() {
+            state.approving = false;
+            if (engine.approvePolicy(app.sim, ids))
+              toast("Rekomendasi disetujui dan tercatat waktunya.");
+            state.unchecked.clear();
+            state.deferred = null;
+            app.render();
+          },
+          onUndo() {
+            state.approving = false;
+            app.render();
+          },
+        });
+      } else return;
+      app.render();
+    });
   }
 
   function thresholdsHTML(sim) {
@@ -728,54 +843,7 @@
         const r = refs(el);
         const app = ctx.app;
 
-        el.addEventListener("change", (event) => {
-          const id = event.target.dataset.item;
-          if (!id) return;
-          if (event.target.checked) state.unchecked.delete(id);
-          else state.unchecked.add(id);
-        });
-        el.addEventListener("click", (event) => {
-          const action = event.target.closest("[data-action]")?.dataset.action;
-          const pending = engine.pendingPolicyStatus(app.sim);
-          if (!pending) return;
-          if (action === "edit") {
-            state.editing = !state.editing;
-          } else if (action === "defer") {
-            engine.logEvent(
-              app.sim,
-              "defer",
-              `Rekomendasi ${pending} ditunda oleh Pemda`,
-            );
-            state.deferred = { status: pending, t: app.sim.t };
-            state.editing = false;
-            toast("Rekomendasi ditunda. Batas waktu SLA tetap berjalan.");
-          } else if (action === "approve") {
-            if (state.approving) return;
-            const ids = ews
-              .recommendations(pending, app.sim.cfg)
-              .map((item) => item.id)
-              .filter((id) => !state.unchecked.has(id));
-            state.approving = true;
-            state.editing = false;
-            ui.undoable({
-              text: pending === "KRISIS" ? `SE KRISIS terbit, ${ids.length} butir dijalankan` : `${ids.length} butir rekomendasi disetujui`,
-              seconds: 8,
-              onCommit() {
-                state.approving = false;
-                if (engine.approvePolicy(app.sim, ids))
-                  toast("Rekomendasi disetujui dan tercatat waktunya.");
-                state.unchecked.clear();
-                state.deferred = null;
-                app.render();
-              },
-              onUndo() {
-                state.approving = false;
-                app.render();
-              },
-            });
-          } else return;
-          app.render();
-        });
+        bindRecActions(el, state, app);
 
         function update(sim) {
           const rec = recommendationsView(sim, state);
@@ -791,6 +859,64 @@
   }
 
   // ---------- Halaman: Penimbunan ----------
+
+  /** Kirim daftar penimbun dengan jendela batal; jejak "terkirim" disimpan di state. */
+  function bindOffenderSend(el, state, app) {
+    el.addEventListener("click", (event) => {
+      if (!event.target.closest('[data-action="send-offenders"]')) return;
+      if (state.sending) return;
+      const count = offendersToday(app.sim).length;
+      state.sending = true;
+      app.render();
+      ui.undoable({
+        text: `Daftar ${count} kendaraan dikirim ke Satpol PP / Polres`,
+        seconds: 6,
+        onCommit() {
+          state.sending = false;
+          engine.logEvent(
+            app.sim,
+            "report",
+            `Daftar ${count} kendaraan diduga menimbun dikirim ke Satpol PP / Polres`,
+          );
+          state.sent = { t: app.sim.t, count };
+          toast("Daftar diteruskan ke Satpol PP / Polres.");
+          app.render();
+        },
+        onUndo() {
+          state.sending = false;
+          app.render();
+        },
+      });
+    });
+  }
+
+  /** Tombol kirim dan catatannya mengikuti state kirim; firstLabel = teks sebelum pernah terkirim. */
+  function syncSend(r, all, state, firstLabel) {
+    r.send.disabled = all.length === 0 || Boolean(state.sending);
+    const fresh = state.sent ? all.length - state.sent.count : all.length;
+    setHTML(
+      r.send,
+      `${icon("send", 16)}${state.sent ? `Kirim pembaruan${fresh > 0 ? ` (${num(fresh)} baru)` : ""}` : esc(firstLabel)}`,
+    );
+    setText(
+      r.sendNote,
+      state.sending
+        ? "Mengirim… bisa dibatalkan di bilah bawah."
+        : state.sent
+          ? `Terkirim ${when(state.sent.t)} · ${num(state.sent.count)} kendaraan.`
+          : "Daftar dikirim beserta SPBU dan alasan penolakan.",
+    );
+  }
+
+  function reasonPill(offender) {
+    const tone = offender.reason === "kuota habis" ? "warn" : "crit";
+    return `<span class="pill tone-${tone}">${shape(tone === "crit" ? "square" : "triangle")}${esc(REASON_LABEL[offender.reason])}</span>`;
+  }
+
+  const NO_OFFENDERS = [
+    "Belum ada penolakan hari ini",
+    "Kunci anti-penimbunan di POS aktif otomatis saat status KRISIS.",
+  ];
 
   function penimbunanPage(state) {
     return {
@@ -821,32 +947,7 @@
           state.page = 1;
           app.render();
         });
-        el.addEventListener("click", (event) => {
-          if (!event.target.closest('[data-action="send-offenders"]')) return;
-          if (state.sending) return;
-          const count = offendersToday(app.sim).length;
-          state.sending = true;
-          app.render();
-          ui.undoable({
-            text: `Daftar ${count} kendaraan dikirim ke Satpol PP / Polres`,
-            seconds: 6,
-            onCommit() {
-              state.sending = false;
-              engine.logEvent(
-                app.sim,
-                "report",
-                `Daftar ${count} kendaraan diduga menimbun dikirim ke Satpol PP / Polres`,
-              );
-              state.sent = { t: app.sim.t, count };
-              toast("Daftar diteruskan ke Satpol PP / Polres.");
-              app.render();
-            },
-            onUndo() {
-              state.sending = false;
-              app.render();
-            },
-          });
-        });
+        bindOffenderSend(el, state, app);
 
         function update(sim) {
           const all = offendersToday(sim);
@@ -867,24 +968,16 @@
           );
           const pageInfo = ui.paginate(list, state.page, PER_PAGE.offenders);
           state.page = pageInfo.page;
-          r.send.disabled = all.length === 0 || Boolean(state.sending);
-          const fresh = state.sent ? all.length - state.sent.count : all.length;
-          setHTML(
-            r.send,
-            `${icon("send", 16)}${state.sent ? `Kirim pembaruan${fresh > 0 ? ` (${num(fresh)} baru)` : ""}` : "Teruskan ke Satpol PP"}`,
-          );
-          setText(
-            r.sendNote,
-            state.sending
-              ? "Mengirim… bisa dibatalkan di bilah bawah."
-              : state.sent
-                ? `Terkirim ${when(state.sent.t)} · ${num(state.sent.count)} kendaraan.`
-                : "Daftar dikirim beserta SPBU dan alasan penolakan.",
-          );
+          syncSend(r, all, state, "Teruskan ke Satpol PP");
           if (pageInfo.rows.length === 0) {
             setHTML(
               r.table,
-              `<div class="empty"><span class="empty-icon">${icon("shield", 20)}</span><strong>${all.length ? "Tidak ada yang cocok" : "Belum ada penolakan hari ini"}</strong><span class="note">${all.length ? "Ubah kata kunci atau saringan." : "Kunci anti-penimbunan di POS aktif otomatis saat status KRISIS."}</span></div>`,
+              all.length
+                ? emptyHTML(
+                    "Tidak ada yang cocok",
+                    "Ubah kata kunci atau saringan.",
+                  )
+                : emptyHTML(...NO_OFFENDERS),
             );
             setHTML(r.pager, "");
             return;
@@ -892,12 +985,11 @@
           const rows = pageInfo.rows
             .map((offender) => {
               const spbu = sim.spbu[offender.spbuId];
-              const tone = offender.reason === "kuota habis" ? "warn" : "crit";
               return `<tr>
                 <td><span class="plate-chip">${esc(offender.plate)}</span></td>
                 <td class="nowrap">${esc(spbu.name)}</td>
                 <td class="muted">${esc(spbu.kecamatan)}</td>
-                <td><span class="pill tone-${tone}">${shape(tone === "crit" ? "square" : "triangle")}${esc(REASON_LABEL[offender.reason])}</span></td>
+                <td>${reasonPill(offender)}</td>
                 <td class="num"><b>${num(offender.countToday)}×</b></td>
               </tr>`;
             })
@@ -1072,5 +1164,30 @@
   }
 
   ns.views = ns.views || {};
-  ns.views.pemda = { mount, shell: true };
+  // Bagian yang dipakai ulang tata letak wireframe (wf-pemda.js).
+  ns.views.pemda = {
+    mount,
+    shell: true,
+    parts: {
+      MAP_VIEW,
+      FILTER_FIELDS,
+      legendItems,
+      mountMap,
+      kecFilter,
+      bindKecamatan,
+      emptyHTML,
+      offendersToday,
+      criticalTone,
+      ratioValue,
+      ratioKpi,
+      demandKpi,
+      drawProjection,
+      recommendationsView,
+      bindRecActions,
+      bindOffenderSend,
+      syncSend,
+      reasonPill,
+      NO_OFFENDERS,
+    },
+  };
 })((globalThis.SiTanggap = globalThis.SiTanggap || {}));

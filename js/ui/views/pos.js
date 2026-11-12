@@ -119,6 +119,139 @@
       ? decision.maxLiters
       : vehicle.askLiters;
 
+  /** Temuan kamera yang memblokir pengisian, atau null. */
+  const detected = (vehicle) =>
+    vehicle.jerrycan
+      ? "Jeriken"
+      : vehicle.modifiedTank
+        ? "Tangki modifikasi"
+        : null;
+
+  /** Kuota harian nopol saat krisis; null berarti tanpa batas (mode normal). */
+  function quotaInfo(vehicle, sim) {
+    if (!sim.crisisMode.active) return null;
+    const quota = sim.crisisMode.quota[vehicle.type];
+    const usedToday = used(vehicle);
+    return { quota, used: usedToday, left: Math.max(0, quota - usedToday) };
+  }
+
+  /** Status satu kendaraan antrean; partial = sisa kuota setelah pengisian sebelumnya hari ini. */
+  function queueStatus(vehicle, sim) {
+    const decision = decide(vehicle, sim);
+    return {
+      decision,
+      allowed: decision.allowed,
+      liters: shownLiters(vehicle, decision),
+      partial: sim.crisisMode.active && used(vehicle) > 0,
+    };
+  }
+
+  const queueMark = (allowed) =>
+    allowed ? ui.marker("ok", "circle") : ui.marker("crit", "square");
+
+  const modeHTML = (sim) =>
+    sim.crisisMode.active
+      ? pill("KRISIS", { label: "MODE KRISIS AKTIF", large: true })
+      : pill("NORMAL", { label: "MODE NORMAL", large: true });
+
+  function ensure() {
+    if (!desk.current) reset();
+  }
+
+  function syncDay(sim) {
+    const day = ui.dayNumber(sim.t);
+    if (day !== desk.day) {
+      desk.day = day;
+      desk.ledger.clear(); // kuota per nopol berlaku per hari
+    }
+  }
+
+  /** Isi atau tolak kendaraan di nozzle; true bila aksi dijalankan. */
+  function act(action, app) {
+    const decision = decide(desk.current, app.sim);
+    if (action !== "reject" && !(action === "fill" && decision.allowed))
+      return false;
+    // Simpan keadaan meja supaya transaksi bisa dibatalkan beberapa detik.
+    const vehicle = desk.current;
+    const before = {
+      current: vehicle,
+      queue: [...desk.queue],
+      served: desk.served,
+      rejected: desk.rejected,
+      liters: desk.liters,
+      usedBefore: desk.ledger.get(vehicle.plate),
+    };
+    let text;
+    if (action === "fill") {
+      const liters = litersFor(vehicle, decision);
+      desk.ledger.set(vehicle.plate, used(vehicle) + liters);
+      desk.served += 1;
+      desk.liters += liters;
+      text = `${vehicle.plate} · diisi ${num(liters)} L`;
+    } else {
+      desk.rejected += 1;
+      text = `${vehicle.plate} · ditolak`;
+    }
+    advance();
+    app.render();
+    ui.undoable({
+      text,
+      seconds: 5,
+      onUndo() {
+        Object.assign(desk, {
+          current: before.current,
+          queue: before.queue,
+          served: before.served,
+          rejected: before.rejected,
+          liters: before.liters,
+        });
+        if (before.usedBefore === undefined) desk.ledger.delete(vehicle.plate);
+        else desk.ledger.set(vehicle.plate, before.usedBefore);
+        app.render();
+      },
+    });
+    return true;
+  }
+
+  const PLATE_ERROR = "Format nopol tidak valid. Contoh yang benar: P 1234 AB.";
+
+  /** Ganti nopol kendaraan di nozzle; false bila format tidak valid. */
+  function correctPlate(value) {
+    const plate = lock.parsePlate(value);
+    if (!plate) return false;
+    desk.current = { ...desk.current, plate };
+    return true;
+  }
+
+  /** Pasang tombol aksi dan form koreksi nopol; dipakai POS tablet dan versi wireframe. */
+  function bindDesk(root, r, app) {
+    root.addEventListener("click", (event) => {
+      const action = event.target.closest("[data-action]")?.dataset.action;
+      if (action && act(action, app)) r.plateError.textContent = "";
+    });
+    r.correction.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const input = r.correction.elements.plate;
+      if (!correctPlate(input.value)) {
+        r.plateError.textContent = PLATE_ERROR;
+        input.focus();
+        return;
+      }
+      r.plateError.textContent = "";
+      input.value = "";
+      app.render();
+    });
+  }
+
+  /** Form koreksi nopol manual beserta pesan galatnya. */
+  const correctionHTML = (hidden = false) => `
+    <form class="correction" data-ref="correction" novalidate${hidden ? " hidden" : ""}>
+      <label class="sr-only" for="plate-input">Koreksi nopol manual</label>
+      <span class="input-wrap"><span>${icon("scan", 16)}</span><input id="plate-input" type="text" name="plate" maxlength="12" placeholder="Koreksi nopol manual, mis. P 1234 AB" autocomplete="off" aria-describedby="plate-error"></span>
+      <button type="submit" class="btn">Cek ulang</button>
+    </form>
+    <p class="field-error" id="plate-error" data-ref="plateError" role="alert"></p>`;
+
   // ---------- Ilustrasi kamera ANPR (SVG 640×360) ----------
   // Warna kotak deteksi: tanda NORMAL dan KRISIS tema v2, versi KRISIS dicerahkan agar terbaca di latar gelap.
   const CAM_OK = "#25ae83";
@@ -248,12 +381,7 @@
             <div class="panel">
               <div class="panel-body" style="padding-top: 14px">
                 <div class="plate-read" data-ref="vehicle"></div>
-                <form class="correction" data-ref="correction" novalidate>
-                  <label class="sr-only" for="plate-input">Koreksi nopol manual</label>
-                  <span class="input-wrap"><span>${icon("scan", 16)}</span><input id="plate-input" type="text" name="plate" maxlength="12" placeholder="Koreksi nopol manual, mis. P 1234 AB" autocomplete="off" aria-describedby="plate-error"></span>
-                  <button type="submit" class="btn">Cek ulang</button>
-                </form>
-                <p class="field-error" id="plate-error" data-ref="plateError" role="alert"></p>
+                ${correctionHTML()}
               </div>
             </div>
           </section>
@@ -284,26 +412,21 @@
 
   function decisionHTML(vehicle, decision, sim) {
     const crisis = sim.crisisMode.active;
-    const detected = vehicle.jerrycan
-      ? "Jeriken"
-      : vehicle.modifiedTank
-        ? "Tangki modifikasi"
-        : "Tidak ada";
+    const found = detected(vehicle);
     const facts = `<dl class="facts">
-      <dt>Jeriken atau tangki modifikasi</dt><dd class="${detected === "Tidak ada" ? "" : "is-alert"}">${detected}</dd>
+      <dt>Jeriken atau tangki modifikasi</dt><dd class="${found ? "is-alert" : ""}">${found || "Tidak ada"}</dd>
       <dt>Pengisian terakhir</dt><dd>${vehicle.lastFillHours} jam lalu di SPBU ${esc(vehicle.lastFillSpbu)}</dd>
       <dt>Permintaan pengendara</dt><dd>${num(vehicle.askLiters)} liter</dd>
     </dl>`;
 
-    const quota = crisis ? sim.crisisMode.quota[vehicle.type] : null;
-    const usedToday = used(vehicle);
+    const q = quotaInfo(vehicle, sim);
     // Kuota dan fakta kendaraan satu kartu: keduanya dasar vonis di atasnya.
-    const quotaBox = crisis
+    const quotaBox = q
       ? `<div class="quota">
           <span class="sla-label">Sisa kuota hari ini</span>
-          <span class="quota-value">${num(Math.max(0, quota - usedToday), 1)} liter</span>
-          <div class="meter"><span class="fill" style="width:${Math.max(0, ((quota - usedToday) / quota) * 100).toFixed(1)}%;background:var(--brand)"></span></div>
-          <span class="note">Terpakai ${num(usedToday)} dari ${num(quota)} liter, dihitung di semua SPBU</span>
+          <span class="quota-value">${num(q.left, 1)} liter</span>
+          <div class="meter"><span class="fill" style="width:${((q.left / q.quota) * 100).toFixed(1)}%;background:var(--brand)"></span></div>
+          <span class="note">Terpakai ${num(q.used)} dari ${num(q.quota)} liter, dihitung di semua SPBU</span>
           ${facts}
         </div>`
       : `<div class="quota"><span class="sla-label">Kuota per nopol</span><span class="quota-value">Tanpa batas</span><span class="note">Kuota berlaku otomatis saat status KRISIS.</span>${facts}</div>`;
@@ -325,104 +448,29 @@
   function queueHTML(sim) {
     return desk.queue
       .map((vehicle) => {
-        const decision = decide(vehicle, sim);
+        const status = queueStatus(vehicle, sim);
         const kind = TYPE_BY_ID[vehicle.type];
-        const liters = num(shownLiters(vehicle, decision));
-        const text = !decision.allowed
-          ? REASONS[decision.reason]
-          : sim.crisisMode.active && used(vehicle) > 0
+        const liters = num(status.liters);
+        const text = !status.allowed
+          ? REASONS[status.decision.reason]
+          : status.partial
             ? `Sisa kuota ${liters} L`
             : `Boleh isi ${liters} L`;
-        const mark = decision.allowed
-          ? ui.marker("ok", "circle")
-          : ui.marker("crit", "square");
-        return `<div class="q-card${decision.allowed ? "" : " is-blocked"}"><span class="q-icon">${icon(kind.icon, 22)}</span><div class="q-body"><span class="plate-chip">${esc(vehicle.plate)}</span><span class="q-status">${mark}${esc(text)}</span></div></div>`;
+        const mark = queueMark(status.allowed);
+        return `<div class="q-card${status.allowed ? "" : " is-blocked"}"><span class="q-icon">${icon(kind.icon, 22)}</span><div class="q-body"><span class="plate-chip">${esc(vehicle.plate)}</span><span class="q-status">${mark}${esc(text)}</span></div></div>`;
       })
       .join("");
   }
 
   function mount(root, app) {
-    if (!desk.current) reset();
+    ensure();
     root.innerHTML = TEMPLATE;
     const r = refs(root);
-
-    root.addEventListener("click", (event) => {
-      const action = event.target.closest("[data-action]")?.dataset.action;
-      if (!action) return;
-      const decision = decide(desk.current, app.sim);
-      if (action !== "reject" && !(action === "fill" && decision.allowed))
-        return;
-      // Simpan keadaan meja supaya transaksi bisa dibatalkan beberapa detik.
-      const vehicle = desk.current;
-      const before = {
-        current: vehicle,
-        queue: [...desk.queue],
-        served: desk.served,
-        rejected: desk.rejected,
-        liters: desk.liters,
-        usedBefore: desk.ledger.get(vehicle.plate),
-      };
-      let text;
-      if (action === "fill") {
-        const liters = litersFor(vehicle, decision);
-        desk.ledger.set(vehicle.plate, used(vehicle) + liters);
-        desk.served += 1;
-        desk.liters += liters;
-        text = `${vehicle.plate} · diisi ${num(liters)} L`;
-      } else {
-        desk.rejected += 1;
-        text = `${vehicle.plate} · ditolak`;
-      }
-      advance();
-      r.plateError.textContent = "";
-      app.render();
-      ui.undoable({
-        text,
-        seconds: 5,
-        onUndo() {
-          Object.assign(desk, {
-            current: before.current,
-            queue: before.queue,
-            served: before.served,
-            rejected: before.rejected,
-            liters: before.liters,
-          });
-          if (before.usedBefore === undefined)
-            desk.ledger.delete(vehicle.plate);
-          else desk.ledger.set(vehicle.plate, before.usedBefore);
-          app.render();
-        },
-      });
-    });
-
-    r.correction.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const input = r.correction.elements.plate;
-      const plate = lock.parsePlate(input.value);
-      if (!plate) {
-        r.plateError.textContent =
-          "Format nopol tidak valid. Contoh yang benar: P 1234 AB.";
-        input.focus();
-        return;
-      }
-      r.plateError.textContent = "";
-      desk.current = { ...desk.current, plate };
-      input.value = "";
-      app.render();
-    });
+    bindDesk(root, r, app);
 
     function update(sim) {
-      const day = ui.dayNumber(sim.t);
-      if (day !== desk.day) {
-        desk.day = day;
-        desk.ledger.clear(); // kuota per nopol berlaku per hari
-      }
-      setHTML(
-        r.mode,
-        sim.crisisMode.active
-          ? pill("KRISIS", { label: "MODE KRISIS AKTIF", large: true })
-          : pill("NORMAL", { label: "MODE NORMAL", large: true }),
-      );
+      syncDay(sim);
+      setHTML(r.mode, modeHTML(sim));
       setText(r.clock, clock(sim.t));
       setHTML(r.camera, cameraSVG(desk.current, sim.t));
       setHTML(r.vehicle, vehicleHTML(desk.current));
@@ -441,5 +489,26 @@
   }
 
   ns.views = ns.views || {};
-  ns.views.pos = { mount, reset };
+  ns.views.pos = {
+    mount,
+    reset,
+    // Bagian bersama untuk versi wireframe; keadaan meja (desk) tetap satu.
+    parts: {
+      desk,
+      TYPE_BY_ID,
+      REASONS,
+      PLATE_ERROR,
+      decide,
+      detected,
+      quotaInfo,
+      queueStatus,
+      queueMark,
+      modeHTML,
+      cameraSVG,
+      correctionHTML,
+      ensure,
+      syncDay,
+      bindDesk,
+    },
+  };
 })((globalThis.SiTanggap = globalThis.SiTanggap || {}));

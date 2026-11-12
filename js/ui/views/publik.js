@@ -33,6 +33,26 @@
       <svg width="58" height="14" viewBox="0 0 58 14" aria-hidden="true" fill="currentColor"><rect x="0" y="9" width="3" height="5" rx="1"/><rect x="5" y="6" width="3" height="8" rx="1"/><rect x="10" y="3" width="3" height="11" rx="1"/><rect x="15" y="0" width="3" height="14" rx="1"/><rect x="28" y="1.5" width="24" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="30.5" y="4" width="15" height="6" rx="1.5"/><rect x="53.5" y="5" width="2" height="4" rx="1"/></svg>
     </span></div>`;
 
+  // Form laporan warga; dipakai halaman publik dan versi wireframe.
+  const REPORT_DIALOG = `<dialog data-ref="dialog" aria-labelledby="report-title">
+      <form data-ref="form" novalidate>
+        <h2 id="report-title">Lapor penimbunan / hoaks</h2>
+        <fieldset>
+          <legend class="sr-only">Jenis laporan</legend>
+          <label><input type="radio" name="type" value="penimbunan" checked> Penimbunan</label>
+          <label><input type="radio" name="type" value="hoaks"> Hoaks</label>
+        </fieldset>
+        <label class="stack">Lokasi dan keterangan
+          <textarea name="text" rows="3" maxlength="200" aria-describedby="report-error"></textarea>
+        </label>
+        <p class="field-error" id="report-error" data-ref="reportError" role="alert"></p>
+        <div style="display:flex;gap:8px">
+          <button type="submit" class="btn btn-primary">${icon("send", 16)}Kirim laporan</button>
+          <button type="button" class="btn" data-action="close">Batal</button>
+        </div>
+      </form>
+    </dialog>`;
+
   const TEMPLATE = `
     <div class="publik">
     <header class="app-head">
@@ -99,24 +119,7 @@
     </div>
     </div>
 
-    <dialog data-ref="dialog" aria-labelledby="report-title">
-      <form data-ref="form" novalidate>
-        <h2 id="report-title">Lapor penimbunan / hoaks</h2>
-        <fieldset>
-          <legend class="sr-only">Jenis laporan</legend>
-          <label><input type="radio" name="type" value="penimbunan" checked> Penimbunan</label>
-          <label><input type="radio" name="type" value="hoaks"> Hoaks</label>
-        </fieldset>
-        <label class="stack">Lokasi dan keterangan
-          <textarea name="text" rows="3" maxlength="200" aria-describedby="report-error"></textarea>
-        </label>
-        <p class="field-error" id="report-error" data-ref="reportError" role="alert"></p>
-        <div style="display:flex;gap:8px">
-          <button type="submit" class="btn btn-primary">${icon("send", 16)}Kirim laporan</button>
-          <button type="button" class="btn" data-action="close">Batal</button>
-        </div>
-      </form>
-    </dialog>`;
+    ${REPORT_DIALOG}`;
 
   function distanceKm(a, b) {
     const rad = (deg) => (deg * Math.PI) / 180;
@@ -143,6 +146,18 @@
     );
   }
 
+  /** Jam pembaruan terakhir halaman publik (data disegarkan tiap 2 jam). */
+  const lastUpdate = (sim) =>
+    Math.floor(sim.t / UPDATE_EVERY_HOURS) * UPDATE_EVERY_HOURS;
+
+  // Publik hanya melihat status yang sudah diumumkan.
+  const shownStatus = (sim) =>
+    sim.infoPublished ? sim.region.status : "NORMAL";
+
+  /** Kunci penyegaran: isi halaman publik hanya berubah tiap 2 jam atau saat keputusan baru terbit. */
+  const refreshKey = (sim, shown) =>
+    `${Math.floor(sim.t / UPDATE_EVERY_HOURS)}|${shown}|${sim.crisisMode.active}|${Boolean(sim.policy.KRISIS)}|${sim.diversion?.approvedAt ?? ""}`;
+
   function statusCardHTML(sim, shown) {
     const meta = STATUS[shown];
     const lines = [];
@@ -154,26 +169,41 @@
     } else if (shown !== "NORMAL") {
       lines.push("Pasokan tetap dikirim. Beli secukupnya.");
     }
-    const lastUpdate =
-      Math.floor(sim.t / UPDATE_EVERY_HOURS) * UPDATE_EVERY_HOURS;
-    lines.push(`Diperbarui ${when(lastUpdate)}.`);
+    lines.push(`Diperbarui ${when(lastUpdate(sim))}.`);
     return `<div class="status-card tone-${meta.tone}"><span class="status-card-tag">${shape(meta.shape)}STATUS ${esc(shown)}</span>
       <strong>${HEADLINES[shown]}</strong>${lines.map((line) => `<p>${esc(line)}</p>`).join("")}
     </div>`;
   }
 
-  function nearestHTML(sim) {
+  /** SPBU terdekat dari lokasi pengguna: jarak, stok, jam truk tiba (bila kosong), dan waktu antre. */
+  function nearest(sim, count = NEAREST_COUNT) {
+    const queueMinutes = Math.max(
+      5,
+      Math.round(sim.region.queueMinutes / 5) * 5,
+    );
     return sim.spbu
       .map((s) => ({ s, km: distanceKm(config.userLocation, s) }))
       .sort((a, b) => a.km - b.km)
-      .slice(0, NEAREST_COUNT)
-      .map(({ s, km }) => {
-        const meta = STOCK[s.klass];
-        const arrival = Number.isFinite(s.etaHours)
-          ? `truk tiba ${clock(sim.t + s.etaHours)}`
-          : "menunggu jadwal pasokan";
-        const queue = `antre sekitar ${num(Math.max(5, Math.round(sim.region.queueMinutes / 5) * 5))} menit`;
-        const detail = `${meta.short}, ${s.klass === "kosong" ? arrival : queue}`;
+      .slice(0, count)
+      .map(({ s, km }) => ({
+        s,
+        km,
+        meta: STOCK[s.klass],
+        empty: s.klass === "kosong",
+        arrivalAt: Number.isFinite(s.etaHours) ? sim.t + s.etaHours : null,
+        queueMinutes,
+      }));
+  }
+
+  function nearestHTML(sim) {
+    return nearest(sim)
+      .map(({ s, km, meta, empty, arrivalAt, queueMinutes }) => {
+        const arrival =
+          arrivalAt !== null
+            ? `truk tiba ${clock(arrivalAt)}`
+            : "menunggu jadwal pasokan";
+        const queue = `antre sekitar ${num(queueMinutes)} menit`;
+        const detail = `${meta.short}, ${empty ? arrival : queue}`;
         return `<div class="spbu-row">${ui.marker(meta.tone, meta.shape)}<div><p class="spbu-name">SPBU ${esc(s.name)}</p><p class="spbu-detail">${esc(detail)}</p></div><span class="spbu-dist">${num(km, 1)} km</span></div>`;
       })
       .join("");
@@ -203,11 +233,14 @@
     return lines;
   }
 
+  const noPolicyText = (shown) =>
+    shown === "NORMAL"
+      ? "Tidak ada pembatasan. Pembelian BBM seperti biasa."
+      : "Belum ada pembatasan. Stok terus dipantau.";
+
   function policiesHTML(sim, shown) {
     const lines = activePolicies(sim);
-    if (lines.length === 0) {
-      return `<p class="note">${shown === "NORMAL" ? "Tidak ada pembatasan. Pembelian BBM seperti biasa." : "Belum ada pembatasan. Stok terus dipantau."}</p>`;
-    }
+    if (lines.length === 0) return `<p class="note">${noPolicyText(shown)}</p>`;
     return `<ul class="policy-list">${lines.map((line) => `<li>${icon("check", 16)}<span>${esc(line)}</span></li>`).join("")}</ul>`;
   }
 
@@ -314,11 +347,10 @@
       .join("")}</ul>`;
   }
 
-  function mount(root, app) {
-    root.innerHTML = TEMPLATE;
-    const r = refs(root);
+  /** Peta kecil SPBU terdekat dengan penanda lokasi pengguna; layer null bila Leaflet tidak termuat. */
+  function mountMap(el) {
     const user = config.userLocation;
-    const map = maps.create(r.map, {
+    const map = maps.create(el, {
       center: [user.lat, user.lng],
       zoom: 12,
       controls: false,
@@ -332,8 +364,11 @@
         .bindTooltip("Lokasi Anda")
         .addTo(map);
     }
-    let shownKey = "";
+    return { map, spbuLayer };
+  }
 
+  /** Tombol data-action="report"/"close" dan kiriman form laporan (butuh ref dialog, form, reportError). */
+  function bindReport(root, r, app) {
     root.addEventListener("click", (event) => {
       const action = event.target.closest("[data-action]")?.dataset.action;
       if (action === "report") {
@@ -362,6 +397,15 @@
       toast("Laporan terkirim ke Pemda dan Pertamina.");
       app.render();
     });
+  }
+
+  function mount(root, app) {
+    root.innerHTML = TEMPLATE;
+    const r = refs(root);
+    const { map, spbuLayer } = mountMap(r.map);
+    let shownKey = "";
+
+    bindReport(root, r, app);
 
     function update(sim) {
       const time = clock(sim.t);
@@ -370,10 +414,8 @@
       setHTML(r.chat, chatHTML(sim));
       setHTML(r.reports, reportsHTML(sim));
 
-      // Publik hanya melihat status yang sudah diumumkan; datanya disegarkan tiap 2 jam.
-      const shown = sim.infoPublished ? sim.region.status : "NORMAL";
-      const bucket = Math.floor(sim.t / UPDATE_EVERY_HOURS);
-      const key = `${bucket}|${shown}|${sim.crisisMode.active}|${Boolean(sim.policy.KRISIS)}|${sim.diversion?.approvedAt ?? ""}`;
+      const shown = shownStatus(sim);
+      const key = refreshKey(sim, shown);
       if (key === shownKey) return;
       shownKey = key;
       setHTML(r.statusCard, statusCardHTML(sim, shown));
@@ -391,5 +433,21 @@
   }
 
   ns.views = ns.views || {};
-  ns.views.publik = { mount };
+  ns.views.publik = {
+    mount,
+    // Bagian bersama untuk versi wireframe.
+    parts: {
+      UPDATE_EVERY_HOURS,
+      REPORT_DIALOG,
+      shownStatus,
+      refreshKey,
+      lastUpdate,
+      firstDiversionArrival,
+      nearest,
+      activePolicies,
+      noPolicyText,
+      mountMap,
+      bindReport,
+    },
+  };
 })((globalThis.SiTanggap = globalThis.SiTanggap || {}));
