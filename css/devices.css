@@ -11,11 +11,13 @@
 }
 
 .device-tablet .pos-bar {
-  background: var(--b900);
+  background:
+    var(--brand-band) top / 100% 4px no-repeat,
+    var(--b900);
 }
 
 .device-tablet .pos-bar .logo-mark {
-  background: var(--b600);
+  background: var(--red);
   box-shadow: none;
 }
 

@@ -27,7 +27,9 @@ body.is-shot {
   height: calc(100dvh - var(--demo-h));
   padding: 18px 12px 14px;
   overflow-y: auto;
-  background: var(--b900);
+  background:
+    var(--brand-band) top / 100% 4px no-repeat,
+    var(--b900);
   color: #c3d2e2;
 }
 
@@ -47,7 +49,7 @@ body.is-shot {
   flex: none;
   place-items: center;
   border-radius: 9px;
-  background: var(--b600);
+  background: var(--red);
 }
 
 .side-brand b {
@@ -97,12 +99,12 @@ body.is-shot {
 
 .side-link[aria-current="page"] {
   background: rgb(255 255 255 / 0.08);
-  box-shadow: inset 3px 0 0 var(--lime);
+  box-shadow: inset 3px 0 0 var(--red);
   color: #fff;
 }
 
 .side-link[aria-current="page"] .i {
-  color: var(--lime);
+  color: #fff;
 }
 
 .side-link em {
