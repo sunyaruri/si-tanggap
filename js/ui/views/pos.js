@@ -297,23 +297,25 @@
 
     const quota = crisis ? sim.crisisMode.quota[vehicle.type] : null;
     const usedToday = used(vehicle);
+    // Kuota dan fakta kendaraan satu kartu: keduanya dasar vonis di atasnya.
     const quotaBox = crisis
       ? `<div class="quota">
           <span class="sla-label">Sisa kuota hari ini</span>
           <span class="quota-value">${num(Math.max(0, quota - usedToday), 1)} liter</span>
           <div class="meter"><span class="fill" style="width:${Math.max(0, ((quota - usedToday) / quota) * 100).toFixed(1)}%;background:var(--brand)"></span></div>
           <span class="note">Terpakai ${num(usedToday)} dari ${num(quota)} liter, dihitung di semua SPBU</span>
+          ${facts}
         </div>`
-      : `<div class="quota"><span class="sla-label">Kuota per nopol</span><span class="quota-value">Tanpa batas</span><span class="note">Kuota berlaku otomatis saat status KRISIS.</span></div>`;
+      : `<div class="quota"><span class="sla-label">Kuota per nopol</span><span class="quota-value">Tanpa batas</span><span class="note">Kuota berlaku otomatis saat status KRISIS.</span>${facts}</div>`;
 
     if (!decision.allowed) {
       return `<div class="verdict is-blocked"><span class="verdict-icon">${icon("ban", 30)}</span><div><strong>DIBLOKIR</strong>${esc(REASONS[decision.reason])}</div></div>
-        ${quotaBox}${facts}
+        ${quotaBox}
         <button type="button" class="btn btn-primary btn-lg btn-block" data-action="reject">${icon("x", 20)}Catat penolakan</button>`;
     }
     const liters = shownLiters(vehicle, decision);
     return `<div class="verdict is-ok"><span class="verdict-icon">${icon("check", 30)}</span><div><strong>BOLEH ISI</strong>${crisis ? "Masih dalam kuota harian" : "Tanpa batas volume"}</div></div>
-      ${quotaBox}${facts}
+      ${quotaBox}
       <div class="btn-row" style="display:flex;gap:10px">
         <button type="button" class="btn btn-primary btn-lg" style="flex:2" data-action="fill">${icon("fuel", 20)}${crisis ? `Isi maks ${num(liters)} L` : `Isi ${num(liters)} L`}</button>
         <button type="button" class="btn btn-lg" style="flex:1" data-action="reject">Tolak</button>
@@ -348,7 +350,8 @@
       const action = event.target.closest("[data-action]")?.dataset.action;
       if (!action) return;
       const decision = decide(desk.current, app.sim);
-      if (action !== "reject" && !(action === "fill" && decision.allowed)) return;
+      if (action !== "reject" && !(action === "fill" && decision.allowed))
+        return;
       // Simpan keadaan meja supaya transaksi bisa dibatalkan beberapa detik.
       const vehicle = desk.current;
       const before = {
@@ -384,7 +387,8 @@
             rejected: before.rejected,
             liters: before.liters,
           });
-          if (before.usedBefore === undefined) desk.ledger.delete(vehicle.plate);
+          if (before.usedBefore === undefined)
+            desk.ledger.delete(vehicle.plate);
           else desk.ledger.set(vehicle.plate, before.usedBefore);
           app.render();
         },

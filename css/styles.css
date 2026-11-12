@@ -2284,6 +2284,12 @@ body.is-shot .view {
   font-size: 14px;
 }
 
+.quota .facts {
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
 .facts dt {
   color: var(--muted);
 }
